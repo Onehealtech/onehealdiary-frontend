@@ -3,7 +3,8 @@ import {
   doctors as initialDoctors, vendors as initialVendors, patients as initialPatients,
   diaries as initialDiaries, diaryEntries as initialEntries, notifications as initialNotifications,
   auditLogs as initialAuditLogs, assistants as initialAssistants, tasks as initialTasks,
-  Doctor, Vendor, Patient, Diary, DiaryEntry, Notification, AuditLog, Assistant, Task,
+  superAdmins as initialSuperAdmins,
+  Doctor, Vendor, Patient, Diary, DiaryEntry, Notification, AuditLog, Assistant, Task, SuperAdmin,
 } from "@/data/mockData";
 
 interface DataContextType {
@@ -16,6 +17,7 @@ interface DataContextType {
   auditLogs: AuditLog[];
   assistants: Assistant[]; setAssistants: React.Dispatch<React.SetStateAction<Assistant[]>>;
   tasks: Task[]; setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  superAdmins: SuperAdmin[]; setSuperAdmins: React.Dispatch<React.SetStateAction<SuperAdmin[]>>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -30,12 +32,13 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [auditLogs] = useState<AuditLog[]>(initialAuditLogs);
   const [assistants, setAssistants] = useState<Assistant[]>(initialAssistants);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [superAdmins, setSuperAdmins] = useState<SuperAdmin[]>(initialSuperAdmins);
 
   return (
     <DataContext.Provider value={{
       doctors, setDoctors, vendors, setVendors, patients, setPatients,
       diaries, setDiaries, diaryEntries, setDiaryEntries, notifications, setNotifications,
-      auditLogs, assistants, setAssistants, tasks, setTasks,
+      auditLogs, assistants, setAssistants, tasks, setTasks, superAdmins, setSuperAdmins,
     }}>
       {children}
     </DataContext.Provider>
