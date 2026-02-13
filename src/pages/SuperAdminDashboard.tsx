@@ -7,7 +7,7 @@ import StatusBadge from "@/components/common/StatusBadge";
 import {
   Users, Store, BookOpen, Clock, Plus, Search, DollarSign, FileText,
   CreditCard, ClipboardList, ShieldCheck, IndianRupee, Percent, Receipt,
-  Download, Filter,
+  Download, Filter, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const navItems = [
   { label: "User Management", path: "/super-admin", icon: Users },
+  { label: "Diary Inventory", path: "/super-admin/diary-inventory", icon: Package },
   { label: "Inventory & Approvals", path: "/super-admin/inventory", icon: BookOpen },
   { label: "Financials", path: "/super-admin/financials", icon: CreditCard },
   { label: "Compliance Audit", path: "/super-admin/audit", icon: ClipboardList },

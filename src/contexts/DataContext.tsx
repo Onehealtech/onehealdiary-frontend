@@ -5,6 +5,7 @@ import {
   auditLogs as initialAuditLogs, assistants as initialAssistants, tasks as initialTasks,
   superAdmins as initialSuperAdmins,
   Doctor, Vendor, Patient, Diary, DiaryEntry, Notification, AuditLog, Assistant, Task, SuperAdmin,
+  GeneratedDiary, DiaryRequest,
 } from "@/data/mockData";
 
 interface DataContextType {
@@ -18,6 +19,8 @@ interface DataContextType {
   assistants: Assistant[]; setAssistants: React.Dispatch<React.SetStateAction<Assistant[]>>;
   tasks: Task[]; setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   superAdmins: SuperAdmin[]; setSuperAdmins: React.Dispatch<React.SetStateAction<SuperAdmin[]>>;
+  generatedDiaries: GeneratedDiary[]; setGeneratedDiaries: React.Dispatch<React.SetStateAction<GeneratedDiary[]>>;
+  diaryRequests: DiaryRequest[]; setDiaryRequests: React.Dispatch<React.SetStateAction<DiaryRequest[]>>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -33,12 +36,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [assistants, setAssistants] = useState<Assistant[]>(initialAssistants);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [superAdmins, setSuperAdmins] = useState<SuperAdmin[]>(initialSuperAdmins);
+  const [generatedDiaries, setGeneratedDiaries] = useState<GeneratedDiary[]>([]);
+  const [diaryRequests, setDiaryRequests] = useState<DiaryRequest[]>([]);
 
   return (
     <DataContext.Provider value={{
       doctors, setDoctors, vendors, setVendors, patients, setPatients,
       diaries, setDiaries, diaryEntries, setDiaryEntries, notifications, setNotifications,
       auditLogs, assistants, setAssistants, tasks, setTasks, superAdmins, setSuperAdmins,
+      generatedDiaries, setGeneratedDiaries, diaryRequests, setDiaryRequests,
     }}>
       {children}
     </DataContext.Provider>
