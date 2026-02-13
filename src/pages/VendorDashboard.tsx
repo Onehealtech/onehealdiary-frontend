@@ -159,18 +159,28 @@ export default function VendorDashboard() {
               <>
                 <p className="text-sm text-muted-foreground">Select the type of diary for this patient:</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {diaryTypeOptions.map(dt => (
-                    <button
-                      key={dt.value}
-                      onClick={() => setDiaryType(dt.value)}
-                      className={`p-4 rounded-lg border-2 text-center transition-all ${diaryType === dt.value ? "border-secondary bg-secondary/10" : "border-border hover:border-secondary/50"}`}
-                    >
-                      <span className="text-2xl">{dt.icon}</span>
-                      <p className="text-sm font-medium mt-1">{dt.label}</p>
-                    </button>
-                  ))}
+                  {diaryTypeOptions.map(dt => {
+                    const isDisabled = dt.value === "follow-up" || dt.value === "chemotherapy" || dt.value === "radiology";
+                    return (
+                      <button
+                        key={dt.value}
+                        onClick={() => !isDisabled && setDiaryType(dt.value)}
+                        disabled={isDisabled}
+                        title={isDisabled ? "Available soon" : undefined}
+                        className={`p-4 rounded-lg border-2 text-center transition-all relative ${isDisabled ? "opacity-50 cursor-not-allowed bg-muted border-border" : diaryType === dt.value ? "border-secondary bg-secondary/10" : "border-border hover:border-secondary/50 cursor-pointer"}`}
+                      >
+                        <span className="text-2xl">{dt.icon}</span>
+                        <p className="text-sm font-medium mt-1">{dt.label}</p>
+                        {isDisabled ? (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-muted-foreground/20 text-muted-foreground rounded-full mt-1 inline-block">Coming Soon</span>
+                        ) : (
+                          <span className="text-[10px] text-success mt-1 inline-block">✅ Available</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-                <Button onClick={() => setStep(3)} disabled={!diaryType} className="w-full gradient-teal text-primary-foreground">Next <ArrowRight className="h-4 w-4 ml-1" /></Button>
+                <Button onClick={() => setStep(3)} disabled={!diaryType || diaryType === "follow-up" || diaryType === "chemotherapy" || diaryType === "radiology"} className="w-full gradient-teal text-primary-foreground">Next <ArrowRight className="h-4 w-4 ml-1" /></Button>
               </>
             )}
 

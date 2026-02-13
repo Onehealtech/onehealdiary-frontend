@@ -35,8 +35,11 @@ export interface AuditLog {
   id: string; timestamp: string; userId: string; userName: string; role: string; action: string; details: string; ipAddress: string; vendorName?: string; doctorName?: string;
 }
 
+export type TaskType = "review_entries" | "send_notifications" | "follow_up_calls" | "schedule_appointments" | "data_entry" | "patient_checkin" | "lab_report_followup" | "other";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+
 export interface Task {
-  id: string; title: string; assignedBy: string; priority: "high" | "medium" | "low"; dueDate: string; status: "pending" | "in_progress" | "completed"; patientIds?: string[];
+  id: string; title: string; description?: string; taskType: TaskType; assignedTo: string; assignedBy: string; priority: TaskPriority; dueDate: string; status: "assigned" | "in_progress" | "completed"; patientIds?: string[]; completedDate?: string; createdDate: string;
 }
 
 export type InventoryDiaryStatus = "unassigned" | "assigned" | "active" | "inactive";
@@ -212,7 +215,7 @@ export const assistants: Assistant[] = [
 ];
 
 export const tasks: Task[] = [
-  { id: "T001", title: "Call high-risk patients", assignedBy: "Dr. Priya Sharma", priority: "high", dueDate: "2024-02-11", status: "pending", patientIds: ["P001", "P003"] },
-  { id: "T002", title: "Review pending diary entries", assignedBy: "Dr. Priya Sharma", priority: "medium", dueDate: "2024-02-12", status: "in_progress", patientIds: ["P002"] },
-  { id: "T003", title: "Follow up on missed appointments", assignedBy: "Dr. Priya Sharma", priority: "low", dueDate: "2024-02-13", status: "completed" },
+  { id: "T001", title: "Call high-risk patients", description: "Follow up with patients who reported elevated symptoms", taskType: "follow_up_calls", assignedTo: "A001", assignedBy: "Dr. Priya Sharma", priority: "high", dueDate: "2024-02-11", status: "assigned", patientIds: ["P001", "P003"], createdDate: "2024-02-10" },
+  { id: "T002", title: "Review pending diary entries", description: "Check all unreviewed entries from this week", taskType: "review_entries", assignedTo: "A001", assignedBy: "Dr. Priya Sharma", priority: "medium", dueDate: "2024-02-12", status: "in_progress", patientIds: ["P002"], createdDate: "2024-02-10" },
+  { id: "T003", title: "Follow up on missed appointments", taskType: "follow_up_calls", assignedTo: "A001", assignedBy: "Dr. Priya Sharma", priority: "low", dueDate: "2024-02-13", status: "completed", completedDate: "2024-02-12", createdDate: "2024-02-09" },
 ];
