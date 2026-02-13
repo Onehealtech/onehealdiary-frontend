@@ -39,6 +39,32 @@ export interface Task {
   id: string; title: string; assignedBy: string; priority: "high" | "medium" | "low"; dueDate: string; status: "pending" | "in_progress" | "completed"; patientIds?: string[];
 }
 
+export type InventoryDiaryStatus = "unassigned" | "assigned" | "active" | "inactive";
+export type DiaryTypeCode = "PO" | "OP" | "FU" | "CH" | "RA";
+
+export interface GeneratedDiary {
+  id: string;
+  type: DiaryType;
+  typeCode: DiaryTypeCode;
+  generatedDate: string;
+  status: InventoryDiaryStatus;
+  assignedVendorId?: string;
+  patientName?: string;
+}
+
+export interface DiaryRequest {
+  id: string;
+  vendorId: string;
+  vendorName: string;
+  type: DiaryType;
+  quantity: number;
+  message?: string;
+  requestDate: string;
+  status: "pending" | "fulfilled" | "rejected";
+  fulfilledDate?: string;
+  assignedDiaryIds?: string[];
+}
+
 // ---- MOCK DATA ----
 export const superAdmins: SuperAdmin[] = [
   { id: "SA001", role: "super_admin", name: "Admin User", email: "admin@oneheal.com", phone: "+91-9000000001", createdDate: "2023-06-01", status: "active" },

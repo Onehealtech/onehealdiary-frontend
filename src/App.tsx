@@ -8,7 +8,9 @@ import { DataProvider } from "@/contexts/DataContext";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
+import SuperAdminDiaryInventory from "./pages/SuperAdminDiaryInventory";
 import VendorDashboard from "./pages/VendorDashboard";
+import VendorMyDiaries from "./pages/VendorMyDiaries";
 import DoctorDashboard from "./pages/DoctorDashboard";
 import AssistantDashboard from "./pages/AssistantDashboard";
 import NotFound from "./pages/NotFound";
@@ -27,8 +29,10 @@ const AppRoutes = () => (
     <Route path="/" element={<LandingPage />} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/super-admin" element={<ProtectedRoute role="super_admin"><SuperAdminDashboard /></ProtectedRoute>} />
+    <Route path="/super-admin/diary-inventory" element={<ProtectedRoute role="super_admin"><SuperAdminDiaryInventory /></ProtectedRoute>} />
     <Route path="/super-admin/*" element={<ProtectedRoute role="super_admin"><SuperAdminDashboard /></ProtectedRoute>} />
     <Route path="/vendor" element={<ProtectedRoute role="vendor"><VendorDashboard /></ProtectedRoute>} />
+    <Route path="/vendor/my-diaries" element={<ProtectedRoute role="vendor"><VendorMyDiaries /></ProtectedRoute>} />
     <Route path="/vendor/*" element={<ProtectedRoute role="vendor"><VendorDashboard /></ProtectedRoute>} />
     <Route path="/doctor" element={<ProtectedRoute role="doctor"><DoctorDashboard /></ProtectedRoute>} />
     <Route path="/doctor/*" element={<ProtectedRoute role="doctor"><DoctorDashboard /></ProtectedRoute>} />

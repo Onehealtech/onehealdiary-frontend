@@ -7,7 +7,7 @@ import StatusBadge from "@/components/common/StatusBadge";
 import {
   ShoppingBag, Wallet, TrendingUp, QrCode,
   Phone, CheckCircle2, ArrowRight, Download, UserPlus, Stethoscope,
-  Eye, Receipt, IndianRupee,
+  Eye, Receipt, IndianRupee, Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ import type { DiaryType } from "@/data/mockData";
 const navItems = [
   { label: "New Sale", path: "/vendor", icon: ShoppingBag },
   { label: "Onboard Doctor", path: "/vendor/doctors", icon: Stethoscope },
+  { label: "My Diaries", path: "/vendor/my-diaries", icon: Package },
   { label: "My Sales", path: "/vendor/sales", icon: TrendingUp },
 ];
 
