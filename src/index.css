@@ -7,87 +7,152 @@
 @layer base {
   :root {
     --background: 210 20% 98%;
+    /* #F5F8FA */
     --foreground: 213 73% 20%;
+    /* #0E2F5A - textPrimary */
 
     --card: 0 0% 100%;
+    /* #FFFFFF - surface */
     --card-foreground: 213 73% 20%;
+    /* #0E2F5A - textPrimary */
 
     --popover: 0 0% 100%;
+    /* #FFFFFF - surface */
     --popover-foreground: 213 73% 20%;
+    /* #0E2F5A - textPrimary */
 
-    --primary: 213 73% 20%;
+    --primary: 186 100% 26%;
+    /* #007787 - primary */
     --primary-foreground: 0 0% 100%;
+    /* #FFFFFF - textOnPrimary */
 
-    --secondary: 187 100% 26%;
+    --secondary: 213 73% 20%;
+    /* #0E2F5A - secondary */
     --secondary-foreground: 0 0% 100%;
+    /* #FFFFFF - textOnSecondary */
 
     --muted: 220 13% 91%;
-    --muted-foreground: 213 30% 45%;
+    /* #E5E5EA - grayLighter */
+    --muted-foreground: 215 16% 47%;
+    /* #64748B - textTertiary */
 
-    --accent: 181 46% 60%;
-    --accent-foreground: 213 73% 15%;
+    --accent: 186 100% 35%;
+    /* #00A0B5 - primaryLight */
+    --accent-foreground: 213 73% 20%;
+    /* #0E2F5A - textPrimary */
 
     --destructive: 0 84% 60%;
+    /* #EF4444 - error */
     --destructive-foreground: 0 0% 100%;
+    /* #FFFFFF */
 
-    --border: 214 36% 88%;
-    --input: 214 36% 88%;
-    --ring: 187 100% 26%;
+    --border: 214 32% 91%;
+    /* #E2E8F0 - border */
+    --input: 214 32% 91%;
+    /* #E2E8F0 - border */
+    --ring: 186 100% 26%;
+    /* #007787 - primary */
 
     --radius: 0.5rem;
 
     /* OneHeal custom tokens */
     --oxford-navy: 213 73% 20%;
-    --stormy-teal: 187 100% 26%;
-    --strong-cyan: 181 46% 60%;
-    --powder-blue: 214 36% 78%;
+    /* #0E2F5A - secondary */
+    --stormy-teal: 186 100% 26%;
+    /* #007787 - primary */
+    --strong-cyan: 186 100% 35%;
+    /* #00A0B5 - primaryLight */
+    --powder-blue: 186 100% 41%;
+    /* #33C4D4 - primaryLighter */
     --platinum: 220 13% 91%;
+    /* #E5E5EA - grayLighter */
 
     --success: 142 71% 45%;
+    /* #10B981 - success */
     --success-foreground: 0 0% 100%;
+    /* #FFFFFF */
     --warning: 38 92% 50%;
+    /* #F59E0B - warning */
     --warning-foreground: 0 0% 100%;
-    --info: 214 36% 78%;
-    --info-foreground: 213 73% 20%;
+    /* #FFFFFF */
+    --info: 186 100% 26%;
+    /* #007787 - info/primary */
+    --info-foreground: 0 0% 100%;
+    /* #FFFFFF */
 
     --sidebar-background: 213 73% 20%;
-    --sidebar-foreground: 214 36% 90%;
-    --sidebar-primary: 181 46% 60%;
-    --sidebar-primary-foreground: 213 73% 15%;
+    /* #0E2F5A - secondary */
+    --sidebar-foreground: 220 13% 91%;
+    /* #E5E5EA - grayLighter */
+    --sidebar-primary: 186 100% 35%;
+    /* #00A0B5 - primaryLight */
+    --sidebar-primary-foreground: 213 73% 20%;
+    /* #0E2F5A */
     --sidebar-accent: 213 60% 28%;
+    /* secondaryLight variant */
     --sidebar-accent-foreground: 0 0% 100%;
+    /* #FFFFFF */
     --sidebar-border: 213 50% 30%;
-    --sidebar-ring: 187 100% 26%;
+    /* secondaryDark variant */
+    --sidebar-ring: 186 100% 26%;
+    /* #007787 - primary */
   }
 
   .dark {
     --background: 213 73% 8%;
-    --foreground: 214 36% 90%;
+    /* Dark navy background */
+    --foreground: 220 13% 91%;
+    /* Light gray text */
     --card: 213 73% 12%;
-    --card-foreground: 214 36% 90%;
+    /* Slightly lighter navy for cards */
+    --card-foreground: 220 13% 91%;
+    /* Light gray text */
     --popover: 213 73% 12%;
-    --popover-foreground: 214 36% 90%;
-    --primary: 181 46% 60%;
+    /* Slightly lighter navy */
+    --popover-foreground: 220 13% 91%;
+    /* Light gray text */
+    --primary: 186 100% 35%;
+    /* Lighter teal for dark mode - #00A0B5 */
     --primary-foreground: 213 73% 10%;
-    --secondary: 187 100% 26%;
+    /* Very dark navy */
+    --secondary: 186 100% 26%;
+    /* Primary teal - #007787 */
     --secondary-foreground: 0 0% 100%;
+    /* White */
     --muted: 213 50% 18%;
-    --muted-foreground: 214 20% 60%;
-    --accent: 187 100% 26%;
+    /* Muted navy */
+    --muted-foreground: 220 13% 60%;
+    /* Medium gray */
+    --accent: 186 100% 41%;
+    /* Bright teal accent - #33C4D4 */
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 30%;
+    /* White */
+    --destructive: 0 62% 50%;
+    /* Darker red for dark mode */
     --destructive-foreground: 0 0% 100%;
+    /* White */
     --border: 213 40% 22%;
+    /* Dark border */
     --input: 213 40% 22%;
-    --ring: 181 46% 60%;
+    /* Dark input border */
+    --ring: 186 100% 35%;
+    /* Lighter teal ring */
     --sidebar-background: 213 73% 8%;
-    --sidebar-foreground: 214 36% 78%;
-    --sidebar-primary: 181 46% 60%;
+    /* Dark navy */
+    --sidebar-foreground: 220 13% 78%;
+    /* Light gray */
+    --sidebar-primary: 186 100% 35%;
+    /* Lighter teal */
     --sidebar-primary-foreground: 213 73% 10%;
+    /* Very dark navy */
     --sidebar-accent: 213 60% 15%;
-    --sidebar-accent-foreground: 214 36% 90%;
+    /* Dark accent */
+    --sidebar-accent-foreground: 220 13% 91%;
+    /* Light gray */
     --sidebar-border: 213 40% 18%;
-    --sidebar-ring: 187 100% 26%;
+    /* Dark border */
+    --sidebar-ring: 186 100% 26%;
+    /* Primary teal */
   }
 }
 
@@ -95,31 +160,41 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
-  h1, h2, h3, h4 {
+
+  h1,
+  h2,
+  h3,
+  h4 {
     font-family: 'Plus Jakarta Sans', sans-serif;
   }
 }
 
 @layer utilities {
   .gradient-brand {
-    background: linear-gradient(135deg, hsl(213 73% 20%), hsl(187 100% 26%));
+    background: linear-gradient(135deg, hsl(213 73% 20%), hsl(186 100% 26%));
   }
+
   .gradient-teal {
-    background: linear-gradient(135deg, hsl(187 100% 26%), hsl(181 46% 60%));
+    background: linear-gradient(135deg, hsl(186 100% 26%), hsl(186 100% 35%));
   }
+
   .gradient-hero {
-    background: linear-gradient(135deg, hsl(213 73% 15%) 0%, hsl(213 73% 22%) 50%, hsl(187 100% 26%) 100%);
+    background: linear-gradient(135deg, hsl(213 73% 15%) 0%, hsl(213 73% 22%) 50%, hsl(186 100% 26%) 100%);
   }
+
   .shadow-clinical {
-    box-shadow: 0 1px 3px 0 hsl(213 73% 20% / 0.06), 0 1px 2px -1px hsl(213 73% 20% / 0.06);
+    box-shadow: 0 1px 3px 0 hsl(186 100% 26% / 0.06), 0 1px 2px -1px hsl(186 100% 26% / 0.06);
   }
+
   .shadow-clinical-md {
-    box-shadow: 0 4px 6px -1px hsl(213 73% 20% / 0.08), 0 2px 4px -2px hsl(213 73% 20% / 0.06);
+    box-shadow: 0 4px 6px -1px hsl(186 100% 26% / 0.08), 0 2px 4px -2px hsl(186 100% 26% / 0.06);
   }
+
   .shadow-clinical-lg {
-    box-shadow: 0 10px 15px -3px hsl(213 73% 20% / 0.08), 0 4px 6px -4px hsl(213 73% 20% / 0.04);
+    box-shadow: 0 10px 15px -3px hsl(186 100% 26% / 0.08), 0 4px 6px -4px hsl(186 100% 26% / 0.04);
   }
 }
