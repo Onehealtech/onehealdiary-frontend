@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { useData } from "@/contexts/DataContext";
@@ -19,6 +19,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import axios from "axios";
 
 const navItems = [
   { label: "User Management", path: "/super-admin", icon: Users },
@@ -40,78 +41,283 @@ export default function SuperAdminDashboard() {
   const [statementOpen, setStatementOpen] = useState(false);
   const [auditRoleFilter, setAuditRoleFilter] = useState("all");
   const [auditActionFilter, setAuditActionFilter] = useState("all");
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   const currentPage = location.pathname;
-  const pendingDiaries = diaries.filter(d => d.status === "pending").length;
-  const activeDiaries = diaries.filter(d => d.status === "active").length;
-  const completedDiaries = diaries.filter(d => d.status === "completed").length;
-  const totalRevenue = diaries.filter(d => d.status === "active").length * 500;
-  const totalCommission = diaries.filter(d => d.status === "active").length * 50;
 
-  const handleAddDoctor = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleAddDoctor = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     const fd = new FormData(e.currentTarget);
-    const newDoc = {
-      id: `D${String(doctors.length + 1).padStart(3, "0")}`,
-      role: "doctor" as const,
-      name: fd.get("name") as string,
-      email: fd.get("email") as string,
-      phone: fd.get("phone") as string,
-      hospital: fd.get("hospital") as string,
-      license: fd.get("license") as string,
-      licenseRegistration: fd.get("licenseReg") as string,
-      specialization: "Oncology",
-      status: "active" as const,
-    };
-    setDoctors(prev => [...prev, newDoc]);
-    setAddDoctorOpen(false);
-    toast({ title: "Doctor onboarded!", description: "Credentials sent to email." });
+
+    try {
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      await axios.post(
+        `${BASE_URL}/api/v1/admin/create-staff`,
+        {
+          fullName: fd.get("name"),
+          email: fd.get("email"),
+          phone: fd.get("phone"),
+          role: "DOCTOR",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      toast({
+        title: "Doctor Created Successfully",
+        description: "Credentials sent to email.",
+      });
+
+      setAddDoctorOpen(false);
+
+      // Refresh doctors list
+      window.location.reload();
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to create doctor",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleAddVendor = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const vendorId = `V${String(vendors.length + 1).padStart(3, "0")}`;
-    const newVendor = {
-      id: vendorId,
-      role: "vendor" as const,
-      name: fd.get("name") as string,
-      email: fd.get("email") as string,
-      location: fd.get("location") as string,
-      phone: fd.get("phone") as string,
-      gst: fd.get("gst") as string,
-      bankDetails: fd.get("bank") as string || "",
-      walletBalance: 0,
-      diariesSold: 0,
-      commissionRate: Number(fd.get("commission")) || 50,
-      status: "active" as const,
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
+
+        const response = await axios.get(
+          `${BASE_URL}/api/v1/dashboard/super-admin`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        setDashboardData(response.data.data);
+      } catch (error: any) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
     };
-    setVendors(prev => [...prev, newVendor]);
-    setAddVendorOpen(false);
-    toast({ title: "Vendor onboarded!", description: `Vendor ID: ${vendorId}` });
+
+    fetchDashboard();
+  }, []);
+
+  useEffect(() => {
+    const fetchSuperAdmins = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
+
+        const response = await axios.get(
+          `${BASE_URL}/api/v1/dashboard/getAllSuperAdmins`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        setSuperAdmins(
+          response.data.data.map((admin: any) => ({
+            id: admin.id,
+            role: "SUPER_ADMIN",
+            name: admin.fullName,
+            email: admin.email,
+            phone: "", // backend not returning phone yet
+            createdDate: new Date(admin.createdAt).toLocaleDateString(),
+            status: "active",
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching super admins", error);
+      }
+    };
+
+    fetchSuperAdmins();
+  }, []);
+
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
+
+        const response = await axios.get(
+          `${BASE_URL}/api/v1/doctors`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const apiDoctors = response.data.data.doctors;
+
+        setDoctors(
+          apiDoctors.map((doc: any) => ({
+            id: doc.id,
+            role: "doctor",
+            name: doc.fullName,
+            email: doc.email,
+            phone: doc.phone,
+            hospital: "—",
+            license: "—",
+            specialization: "General",
+            status: "active",
+            totalPatients: doc.stats?.totalPatients || 0,
+            totalAssistants: doc.stats?.totalAssistants || 0,
+            createdDate: new Date(doc.createdAt).toLocaleDateString(),
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching doctors", error);
+      }
+    };
+
+    fetchDoctors();
+  }, []);
+  useEffect(() => {
+    const fetchVendors = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
+
+        const response = await axios.get(
+          `${BASE_URL}/api/v1/vendors`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const apiVendors = response.data.data.data;
+
+        setVendors(
+          apiVendors.map((vendor: any) => ({
+            id: vendor.id,
+            role: "vendor",
+            name: vendor.fullName,
+            email: vendor.email,
+            phone: vendor.phone,
+            location: "—", // not coming from API
+            gst: "—", // not coming
+            bankDetails: "",
+            walletBalance: 0,
+            diariesSold: 0,
+            commissionRate: 0,
+            status: vendor.isEmailVerified ? "active" : "pending",
+            createdDate: new Date(vendor.createdAt).toLocaleDateString(),
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching vendors", error);
+      }
+    };
+
+    fetchVendors();
+  }, []);
+
+  const handleAddVendor = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const fd = new FormData(e.currentTarget);
+
+    try {
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      await axios.post(
+        `${BASE_URL}/api/v1/admin/create-staff`,
+        {
+          fullName: fd.get("name"),
+          email: fd.get("email"),
+          phone: fd.get("phone"),
+          role: "VENDOR",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      toast({
+        title: "Vendor Created Successfully",
+        description: "Credentials sent to email.",
+      });
+
+      setAddVendorOpen(false);
+
+      window.location.reload();
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to create vendor",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleAddAdmin = (e: React.FormEvent<HTMLFormElement>) => {
+
+  const handleAddAdmin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     const fd = new FormData(e.currentTarget);
+
     const password = fd.get("password") as string;
     const confirm = fd.get("confirmPassword") as string;
+
     if (password !== confirm) {
       toast({ title: "Passwords don't match", variant: "destructive" });
       return;
     }
-    setSuperAdmins(prev => [...prev, {
-      id: `SA${String(prev.length + 1).padStart(3, "0")}`,
-      role: "super_admin",
-      name: fd.get("name") as string,
-      email: fd.get("email") as string,
-      phone: fd.get("phone") as string,
-      createdDate: new Date().toISOString().split("T")[0],
-      status: "active",
-    }]);
-    setAddAdminOpen(false);
-    toast({ title: "Super Admin created!" });
+
+    try {
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+      const response = await axios.post(
+        `${BASE_URL}/api/v1/auth/signup-super-admin`,
+        {
+          fullName: fd.get("name"),
+          email: fd.get("email"),
+          password: password,
+        }
+      );
+
+      toast({
+        title: "Super Admin Created!",
+        description: "Admin saved in database successfully.",
+      });
+
+      setAddAdminOpen(false);
+
+      // Refetch list
+      window.location.reload();
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Something went wrong",
+        variant: "destructive",
+      });
+    }
   };
+
 
   const handleApproveDiary = (id: string) => {
     setDiaries(prev => prev.map(d => d.id === id ? { ...d, status: "active" as const } : d));
@@ -124,7 +330,11 @@ export default function SuperAdminDashboard() {
   };
 
   const filteredDoctors = doctors.filter(d => d.name.toLowerCase().includes(search.toLowerCase()) || d.hospital.toLowerCase().includes(search.toLowerCase()));
-  const filteredVendors = vendors.filter(v => v.name.toLowerCase().includes(search.toLowerCase()) || v.location.toLowerCase().includes(search.toLowerCase()));
+  const filteredVendors = vendors.filter(v =>
+    v.name.toLowerCase().includes(search.toLowerCase()) ||
+    v.email.toLowerCase().includes(search.toLowerCase())
+  );
+
   const filteredDiaries = filterStatus === "all" ? diaries : diaries.filter(d => d.status === filterStatus);
   const filteredAuditLogs = auditLogs
     .filter(l => auditRoleFilter === "all" || l.role.toLowerCase() === auditRoleFilter)
@@ -138,10 +348,10 @@ export default function SuperAdminDashboard() {
       <DashboardLayout navItems={navItems} roleLabel="Super Admin">
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <StatCard title="Total Doctors" value={doctors.length} icon={Users} />
-            <StatCard title="Total Vendors" value={vendors.length} icon={Store} />
-            <StatCard title="Active Diaries" value={activeDiaries} icon={BookOpen} variant="success" />
-            <StatCard title="Pending Approvals" value={pendingDiaries} icon={Clock} variant="warning" />
+            <StatCard title="Total Doctors" value={dashboardData?.users?.totalDoctors} icon={Users} />
+            <StatCard title="Total Vendors" value={dashboardData?.users?.totalVendors} icon={Store} />
+            <StatCard title="Active Diaries" value={dashboardData?.diaries?.activeDiaries} icon={BookOpen} variant="success" />
+            <StatCard title="Pending Approvals" value={dashboardData?.diaries?.pendingApprovals} icon={Clock} variant="warning" />
           </div>
 
           {/* Super Admins */}
@@ -157,7 +367,7 @@ export default function SuperAdminDashboard() {
                   <form onSubmit={handleAddAdmin} className="space-y-3">
                     <div><Label>Name *</Label><Input name="name" required /></div>
                     <div><Label>Email *</Label><Input name="email" type="email" required /></div>
-                    <div><Label>Phone Number *</Label><Input name="phone" placeholder="+91-" required /></div>
+                    {/* <div><Label>Phone Number *</Label><Input name="phone" placeholder="+91-" required /></div> */}
                     <div><Label>Password *</Label><Input name="password" type="password" required /></div>
                     <div><Label>Confirm Password *</Label><Input name="confirmPassword" type="password" required /></div>
                     <DialogFooter><Button type="submit" className="gradient-teal text-primary-foreground">Create Admin</Button></DialogFooter>
@@ -199,10 +409,10 @@ export default function SuperAdminDashboard() {
                     <div><Label>Name *</Label><Input name="name" required /></div>
                     <div><Label>Email *</Label><Input name="email" type="email" required /></div>
                     <div><Label>Phone Number *</Label><Input name="phone" placeholder="+91-" required /></div>
-                    <div><Label>Hospital *</Label><Input name="hospital" required /></div>
-                    <div><Label>Medical License Number *</Label><Input name="license" required /></div>
+                    {/* <div><Label>Hospital *</Label><Input name="hospital" required /></div> */}
+                    {/* <div><Label>Medical License Number *</Label><Input name="license" required /></div>
                     <div><Label>License Registration Number *</Label><Input name="licenseReg" required /></div>
-                    <div><Label>Upload License Photo</Label><Input name="licensePhoto" type="file" accept=".jpg,.png,.pdf" className="cursor-pointer" /></div>
+                    <div><Label>Upload License Photo</Label><Input name="licensePhoto" type="file" accept=".jpg,.png,.pdf" className="cursor-pointer" /></div> */}
                     <DialogFooter><Button type="submit" className="gradient-teal text-primary-foreground">Submit</Button></DialogFooter>
                   </form>
                 </DialogContent>
@@ -249,10 +459,10 @@ export default function SuperAdminDashboard() {
                     <div><Label>Vendor Name *</Label><Input name="name" required /></div>
                     <div><Label>Email *</Label><Input name="email" type="email" required /></div>
                     <div><Label>Phone Number *</Label><Input name="phone" placeholder="+91-" required /></div>
-                    <div><Label>Location *</Label><Input name="location" required /></div>
-                    <div><Label>GST Details *</Label><Input name="gst" placeholder="22AAAAA0000A1Z5" required maxLength={15} /></div>
+                    {/* <div><Label>Location *</Label><Input name="location" required /></div> */}
+                    {/* <div><Label>GST Details *</Label><Input name="gst" placeholder="22AAAAA0000A1Z5" required maxLength={15} /></div>
                     <div><Label>Bank Account Details</Label><Input name="bank" placeholder="Optional" /></div>
-                    <div><Label>Commission Rate (₹)</Label><Input name="commission" type="number" defaultValue={50} /></div>
+                    <div><Label>Commission Rate (₹)</Label><Input name="commission" type="number" defaultValue={50} /></div> */}
                     <DialogFooter><Button type="submit" className="gradient-teal text-primary-foreground">Submit</Button></DialogFooter>
                   </form>
                 </DialogContent>
@@ -349,10 +559,10 @@ export default function SuperAdminDashboard() {
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
             <StatCard title="Total Diaries" value={diaries.length} icon={BookOpen} />
             <StatCard title="Total Vendors" value={vendors.length} icon={Store} />
-            <StatCard title="Active Diaries" value={activeDiaries} icon={BookOpen} variant="success" />
-            <StatCard title="Pending Approval" value={pendingDiaries} icon={Clock} variant="warning" />
-            <StatCard title="Completed" value={completedDiaries} icon={BookOpen} />
-            <StatCard title="In Approval" value={pendingDiaries} icon={Clock} variant="warning" />
+            <StatCard title="Active Diaries" value={dashboardData.diaries.activeDiaries} icon={BookOpen} variant="success" />
+            <StatCard title="Pending Approval" value={dashboardData.diaries.pendingApprovals} icon={Clock} variant="warning" />
+            <StatCard title="Completed" value={dashboardData.diaries.completedDiaries} icon={BookOpen} />
+            <StatCard title="In Approval" value={dashboardData.diaries.pendingApprovals} icon={Clock} variant="warning" />
           </div>
 
           {/* 3 Financial Cards */}
@@ -362,7 +572,7 @@ export default function SuperAdminDashboard() {
                 <div className="h-12 w-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-3">
                   <IndianRupee className="h-6 w-6 text-success" />
                 </div>
-                <p className="text-3xl font-display font-bold">₹{(totalRevenue).toLocaleString("en-IN")}</p>
+                <p className="text-3xl font-display font-bold">₹{(dashboardData.financials.totalRevenue).toLocaleString("en-IN")}</p>
                 <p className="text-sm text-muted-foreground mt-1">Total Amount Received</p>
                 <p className="text-xs text-muted-foreground">Total revenue from diary sales</p>
               </CardContent>
@@ -372,7 +582,7 @@ export default function SuperAdminDashboard() {
                 <div className="h-12 w-12 rounded-full bg-warning/10 flex items-center justify-center mx-auto mb-3">
                   <Percent className="h-6 w-6 text-warning" />
                 </div>
-                <p className="text-3xl font-display font-bold">₹{totalCommission.toLocaleString("en-IN")}</p>
+                {/* <p className="text-3xl font-display font-bold">₹{totalCommission.toLocaleString("en-IN")}</p> */}
                 <p className="text-sm text-muted-foreground mt-1">Commission to Vendor</p>
                 <p className="text-xs text-muted-foreground">Total vendor commissions (10%)</p>
               </CardContent>
@@ -419,9 +629,9 @@ export default function SuperAdminDashboard() {
             <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Complete Financial Statement</DialogTitle></DialogHeader>
               <div className="grid grid-cols-3 gap-4 mb-4">
-                <div className="text-center p-3 bg-success/10 rounded-lg"><p className="text-sm text-muted-foreground">Total In</p><p className="text-xl font-bold text-success">₹{totalRevenue.toLocaleString("en-IN")}</p></div>
-                <div className="text-center p-3 bg-warning/10 rounded-lg"><p className="text-sm text-muted-foreground">Total Out</p><p className="text-xl font-bold text-warning">₹{totalCommission.toLocaleString("en-IN")}</p></div>
-                <div className="text-center p-3 bg-secondary/10 rounded-lg"><p className="text-sm text-muted-foreground">Net Balance</p><p className="text-xl font-bold text-secondary">₹{(totalRevenue - totalCommission).toLocaleString("en-IN")}</p></div>
+                <div className="text-center p-3 bg-success/10 rounded-lg"><p className="text-sm text-muted-foreground">Total In</p><p className="text-xl font-bold text-success">₹{dashboardData.financials.totalRevenue.toLocaleString("en-IN")}</p></div>
+                <div className="text-center p-3 bg-warning/10 rounded-lg"><p className="text-sm text-muted-foreground">Total Out</p><p className="text-xl font-bold text-warning">₹{dashboardData.financials.totalCommission.toLocaleString("en-IN")}</p></div>
+                <div className="text-center p-3 bg-secondary/10 rounded-lg"><p className="text-sm text-muted-foreground">Net Balance</p><p className="text-xl font-bold text-secondary">₹{(dashboardData.financials.totalRevenue - dashboardData.financials.totalCommission).toLocaleString("en-IN")}</p></div>
               </div>
               <div className="flex gap-2 mb-4">
                 <Button size="sm" variant="outline"><Download className="h-4 w-4 mr-1" />PDF</Button>

@@ -30,11 +30,7 @@ export default function VerifyOtpPage() {
                     email: email,
                     otp: otp,
                 },
-                {
-                    headers: {
-                        Authorization: `Bearer ${tempToken}`,
-                    },
-                }
+
             );
 
             const { token, user } = response.data.data;
