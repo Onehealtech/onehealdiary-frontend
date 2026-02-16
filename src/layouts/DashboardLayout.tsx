@@ -25,10 +25,10 @@ interface DashboardLayoutProps {
 }
 
 const roleIcons = {
-  super_admin: Shield,
-  vendor: Store,
-  doctor: Stethoscope,
-  assistant: UserCheck,
+  SUPER_ADMIN: Shield,
+  VENDOR: Store,
+  DOCTOR: Stethoscope,
+  ASSISTANT: UserCheck,
 };
 
 export default function DashboardLayout({ children, navItems, roleLabel }: DashboardLayoutProps) {
@@ -73,7 +73,7 @@ export default function DashboardLayout({ children, navItems, roleLabel }: Dashb
               <RoleIcon className="h-5 w-5 text-sidebar-accent-foreground" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-sidebar-foreground truncate">{user?.name}</p>
+              <p className="text-sm font-semibold text-sidebar-foreground truncate">{user?.fullName}</p>
               <p className="text-xs text-sidebar-foreground/60">{roleLabel}</p>
             </div>
           </div>
@@ -87,11 +87,10 @@ export default function DashboardLayout({ children, navItems, roleLabel }: Dashb
                 key={item.path}
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 text-sm transition-colors ${
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
-                }`}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 text-sm transition-colors ${active
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  }`}
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
@@ -144,7 +143,7 @@ export default function DashboardLayout({ children, navItems, roleLabel }: Dashb
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="gap-2">
                   <div className="h-7 w-7 rounded-full gradient-teal flex items-center justify-center">
-                    <span className="text-xs font-bold text-primary-foreground">{user?.name?.charAt(0)}</span>
+                    <span className="text-xs font-bold text-primary-foreground">{user?.fullName?.charAt(0)}</span>
                   </div>
                   <ChevronDown className="h-3 w-3" />
                 </Button>

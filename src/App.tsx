@@ -14,6 +14,7 @@ import VendorMyDiaries from "./pages/VendorMyDiaries";
 import DoctorDashboard from "./pages/DoctorDashboard";
 import AssistantDashboard from "./pages/AssistantDashboard";
 import NotFound from "./pages/NotFound";
+import VerifyOtpPage from "./components/common/VerifyOtpPage";
 
 const queryClient = new QueryClient();
 
@@ -28,16 +29,17 @@ const AppRoutes = () => (
   <Routes>
     <Route path="/" element={<LandingPage />} />
     <Route path="/login" element={<LoginPage />} />
-    <Route path="/super-admin" element={<ProtectedRoute role="super_admin"><SuperAdminDashboard /></ProtectedRoute>} />
-    <Route path="/super-admin/diary-inventory" element={<ProtectedRoute role="super_admin"><SuperAdminDiaryInventory /></ProtectedRoute>} />
-    <Route path="/super-admin/*" element={<ProtectedRoute role="super_admin"><SuperAdminDashboard /></ProtectedRoute>} />
-    <Route path="/vendor" element={<ProtectedRoute role="vendor"><VendorDashboard /></ProtectedRoute>} />
-    <Route path="/vendor/my-diaries" element={<ProtectedRoute role="vendor"><VendorMyDiaries /></ProtectedRoute>} />
-    <Route path="/vendor/*" element={<ProtectedRoute role="vendor"><VendorDashboard /></ProtectedRoute>} />
-    <Route path="/doctor" element={<ProtectedRoute role="doctor"><DoctorDashboard /></ProtectedRoute>} />
-    <Route path="/doctor/*" element={<ProtectedRoute role="doctor"><DoctorDashboard /></ProtectedRoute>} />
-    <Route path="/assistant" element={<ProtectedRoute role="assistant"><AssistantDashboard /></ProtectedRoute>} />
-    <Route path="/assistant/*" element={<ProtectedRoute role="assistant"><AssistantDashboard /></ProtectedRoute>} />
+    <Route path="/verify-otp" element={<VerifyOtpPage />} />
+    <Route path="/super-admin" element={<ProtectedRoute role="SUPER_ADMIN"><SuperAdminDashboard /></ProtectedRoute>} />
+    <Route path="/super-admin/diary-inventory" element={<ProtectedRoute role="SUPER_ADMIN"><SuperAdminDiaryInventory /></ProtectedRoute>} />
+    <Route path="/super-admin/*" element={<ProtectedRoute role="SUPER_ADMIN"><SuperAdminDashboard /></ProtectedRoute>} />
+    <Route path="/vendor" element={<ProtectedRoute role="VENDOR"><VendorDashboard /></ProtectedRoute>} />
+    <Route path="/vendor/my-diaries" element={<ProtectedRoute role="VENDOR"><VendorMyDiaries /></ProtectedRoute>} />
+    <Route path="/vendor/*" element={<ProtectedRoute role="VENDOR"><VendorDashboard /></ProtectedRoute>} />
+    <Route path="/doctor" element={<ProtectedRoute role="DOCTOR"><DoctorDashboard /></ProtectedRoute>} />
+    <Route path="/doctor/*" element={<ProtectedRoute role="DOCTOR"><DoctorDashboard /></ProtectedRoute>} />
+    <Route path="/assistant" element={<ProtectedRoute role="ASSISTANT"><AssistantDashboard /></ProtectedRoute>} />
+    <Route path="/assistant/*" element={<ProtectedRoute role="ASSISTANT"><AssistantDashboard /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );
