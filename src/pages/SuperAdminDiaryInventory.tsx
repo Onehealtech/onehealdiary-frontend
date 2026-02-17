@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { useData } from "@/contexts/DataContext";
 import StatusBadge from "@/components/common/StatusBadge";
@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import type { DiaryType, DiaryTypeCode, GeneratedDiary, InventoryDiaryStatus } from "@/data/mockData";
+import axios from "axios";
 
 const navItems = [
   { label: "User Management", path: "/super-admin", icon: Users },
@@ -38,8 +39,9 @@ const diaryTypeMap: Record<string, { label: string; code: DiaryTypeCode; enabled
 const quantityOptions = [10, 25, 50, 100];
 
 export default function SuperAdminDiaryInventory() {
-  const { vendors, generatedDiaries, setGeneratedDiaries, notifications, setNotifications, diaryRequests, setDiaryRequests } = useData();
+  const { vendors, generatedDiaries, setGeneratedDiaries, notifications, setVendors, setNotifications, diaryRequests, setDiaryRequests } = useData();
   const { toast } = useToast();
+  console.log(generatedDiaries, "generatedDiaries");
 
   const [selectedType, setSelectedType] = useState<DiaryType | "">("");
   const [quantity, setQuantity] = useState<string>("");
@@ -47,6 +49,7 @@ export default function SuperAdminDiaryInventory() {
   const [lastGenerated, setLastGenerated] = useState<GeneratedDiary[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkVendor, setBulkVendor] = useState("");
+  const [loading, setLoading] = useState(false);
 
   // Filters
   const [filterType, setFilterType] = useState("all");
@@ -56,7 +59,47 @@ export default function SuperAdminDiaryInventory() {
 
   // Request modal
   const [requestModal, setRequestModal] = useState<string | null>(null);
+  useEffect(() => {
+    const fetchVendors = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
 
+        const response = await axios.get(
+          `${BASE_URL}/api/v1/vendors`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const apiVendors = response.data.data.data;
+
+        setVendors(
+          apiVendors.map((vendor: any) => ({
+            id: vendor.id,
+            role: "vendor",
+            name: vendor.fullName,
+            email: vendor.email,
+            phone: vendor.phone,
+            location: vendor.location, // not coming from API
+            gst: vendor.GST, // not coming
+            bankDetails: "",
+            walletBalance: 0,
+            diariesSold: 0,
+            commissionRate: 0,
+            status: vendor.isEmailVerified ? "active" : "pending",
+            createdDate: new Date(vendor.createdAt).toLocaleDateString(),
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching vendors", error);
+      }
+    };
+
+    fetchVendors();
+  }, []);
   const activeVendors = vendors.filter(v => v.status === "active");
 
   const getNextSeq = (typeCode: DiaryTypeCode) => {
@@ -64,67 +107,179 @@ export default function SuperAdminDiaryInventory() {
     return existing.length + 1;
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!selectedType) return;
-    const info = diaryTypeMap[selectedType];
-    const qty = quantity === "custom" ? Number(customQty) : Number(quantity);
-    if (!qty || qty < 1 || qty > 500) return;
 
-    const startSeq = getNextSeq(info.code);
-    const year = new Date().getFullYear();
-    const newDiaries: GeneratedDiary[] = [];
-    for (let i = 0; i < qty; i++) {
-      const seq = String(startSeq + i).padStart(3, "0");
-      newDiaries.push({
-        id: `DRY-${year}-${info.code}-${seq}`,
-        type: selectedType,
-        typeCode: info.code,
-        generatedDate: new Date().toISOString(),
-        status: "unassigned",
+    const qty = quantity === "custom" ? Number(customQty) : Number(quantity);
+    if (!qty || qty < 1 || qty > 500) {
+      toast({ title: "Invalid quantity", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token"); // adjust if stored elsewhere
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/v1/generated-diaries/generate`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            quantity: qty,
+            diaryType: selectedType,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to generate diaries");
+      }
+
+      // assuming backend returns generated diaries array
+
+
+      toast({
+        title: "Diaries generated successfully",
+        description: `${qty} diaries created`,
+      });
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
       });
     }
-    setGeneratedDiaries(prev => [...prev, ...newDiaries]);
-    setLastGenerated(newDiaries);
-    setSelectedIds(new Set());
-    toast({ title: `✅ Successfully generated ${qty} ${info.label} diary IDs` });
   };
 
-  const handleAssignSingle = (diaryId: string, vendorId: string) => {
-    setGeneratedDiaries(prev => prev.map(d => d.id === diaryId ? { ...d, status: "assigned" as const, assignedVendorId: vendorId } : d));
-    setLastGenerated(prev => prev.map(d => d.id === diaryId ? { ...d, status: "assigned" as const, assignedVendorId: vendorId } : d));
-    const vendor = vendors.find(v => v.id === vendorId);
-    toast({ title: "Diary assigned", description: `${diaryId} → ${vendor?.name}` });
-    // Notify vendor
-    setNotifications(prev => [...prev, {
-      id: `N-INV-${Date.now()}`,
-      userId: vendorId,
-      type: "info" as const,
-      severity: "medium" as const,
-      message: `📦 You received 1 diary from Admin: ${diaryId}`,
-      timestamp: new Date().toISOString(),
-      read: false,
-    }]);
+  const fetchGeneratedDiaries = async () => {
+    try {
+      setLoading(true);
+
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/v1/generated-diaries?status=unassigned`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+      console.log(data, "data");
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to fetch diaries");
+      }
+
+      // IMPORTANT: adjust based on backend structure
+      setGeneratedDiaries(data.data.data);
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    fetchGeneratedDiaries();
+  }, []);
+  const handleAssignSingle = async (diaryId: string, vendorId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/v1/generated-diaries/${diaryId}/assign`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ vendorId }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to assign diary");
+      }
+
+      toast({
+        title: "Diary assigned successfully",
+      });
+
+      // Refresh from DB
+      await fetchGeneratedDiaries();
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleBulkAssign = () => {
+
+  const handleBulkAssign = async () => {
     if (!bulkVendor || selectedIds.size === 0) return;
-    const ids = Array.from(selectedIds);
-    setGeneratedDiaries(prev => prev.map(d => ids.includes(d.id) ? { ...d, status: "assigned" as const, assignedVendorId: bulkVendor } : d));
-    setLastGenerated(prev => prev.map(d => ids.includes(d.id) ? { ...d, status: "assigned" as const, assignedVendorId: bulkVendor } : d));
-    const vendor = vendors.find(v => v.id === bulkVendor);
-    setNotifications(prev => [...prev, {
-      id: `N-INV-BULK-${Date.now()}`,
-      userId: bulkVendor,
-      type: "info" as const,
-      severity: "medium" as const,
-      message: `📦 You received ${ids.length} diaries from Admin`,
-      timestamp: new Date().toISOString(),
-      read: false,
-    }]);
-    toast({ title: `Assigned ${ids.length} diaries to ${vendor?.name}` });
-    setSelectedIds(new Set());
-    setBulkVendor("");
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/v1/generated-diaries/bulk-assign`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            diaryIds: Array.from(selectedIds),
+            vendorId: bulkVendor,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Bulk assign failed");
+      }
+
+      toast({
+        title: `Assigned ${selectedIds.size} diaries successfully`,
+      });
+
+      setSelectedIds(new Set());
+      setBulkVendor("");
+
+      // Refresh from DB
+      await fetchGeneratedDiaries();
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
+
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
@@ -135,7 +290,7 @@ export default function SuperAdminDiaryInventory() {
   };
 
   const toggleSelectAll = () => {
-    const unassigned = lastGenerated.filter(d => d.status === "unassigned");
+    const unassigned = generatedDiaries.filter(d => d.status === "unassigned");
     if (selectedIds.size === unassigned.length) {
       setSelectedIds(new Set());
     } else {
@@ -147,7 +302,7 @@ export default function SuperAdminDiaryInventory() {
   const currentRequest = diaryRequests.find(r => r.id === requestModal);
   const handleApproveRequest = () => {
     if (!currentRequest) return;
-    const info = diaryTypeMap[currentRequest.type];
+    const info = diaryTypeMap[currentRequest.diaryType];
     const startSeq = getNextSeq(info.code);
     const year = new Date().getFullYear();
     const newDiaries: GeneratedDiary[] = [];
@@ -155,7 +310,7 @@ export default function SuperAdminDiaryInventory() {
       const seq = String(startSeq + i).padStart(3, "0");
       newDiaries.push({
         id: `DRY-${year}-${info.code}-${seq}`,
-        type: currentRequest.type,
+        diaryType: currentRequest.diaryType,
         typeCode: info.code,
         generatedDate: new Date().toISOString(),
         status: "assigned",
@@ -185,11 +340,11 @@ export default function SuperAdminDiaryInventory() {
   };
 
   // Inventory table filters
-  const allDiaries = generatedDiaries
-    .filter(d => filterType === "all" || d.type === filterType)
-    .filter(d => filterStatus === "all" || d.status === filterStatus)
-    .filter(d => filterVendor === "all" || d.assignedVendorId === filterVendor)
-    .filter(d => !searchId || d.id.toLowerCase().includes(searchId.toLowerCase()));
+  // const allDiaries = generatedDiaries
+  //   .filter(d => filterType === "all" || d.type === filterType)
+  //   .filter(d => filterStatus === "all" || d.status === filterStatus)
+  //   .filter(d => filterVendor === "all" || d.assignedVendorId === filterVendor)
+  //   .filter(d => !searchId || d.id.toLowerCase().includes(searchId.toLowerCase()));
 
   const pendingRequests = diaryRequests.filter(r => r.status === "pending");
 
@@ -214,7 +369,7 @@ export default function SuperAdminDiaryInventory() {
                 {pendingRequests.map(r => (
                   <div key={r.id} className="flex items-center justify-between bg-card rounded-lg p-3 border">
                     <div>
-                      <p className="text-sm font-medium">{r.vendorName} — {r.quantity} {diaryTypeMap[r.type]?.label} diaries</p>
+                      <p className="text-sm font-medium">{r.vendorName} — {r.quantity} {diaryTypeMap[r.diaryType]?.label} diaries</p>
                       <p className="text-xs text-muted-foreground">{r.requestDate}{r.message ? ` • "${r.message}"` : ""}</p>
                     </div>
                     <Button size="sm" onClick={() => setRequestModal(r.id)} className="gradient-teal text-primary-foreground">Review</Button>
@@ -269,20 +424,20 @@ export default function SuperAdminDiaryInventory() {
         </Card>
 
         {/* SECTION 2: Display Generated */}
-        {lastGenerated.length > 0 && (
+        {generatedDiaries.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg font-display">✅ {lastGenerated.length} diaries generated</CardTitle>
+              <CardTitle className="text-lg font-display">✅ {generatedDiaries.length} diaries generated</CardTitle>
               {/* Bulk actions */}
               <div className="flex flex-wrap items-center gap-3 mt-3">
                 <div className="flex items-center gap-2">
-                  <Checkbox checked={selectedIds.size > 0 && selectedIds.size === lastGenerated.filter(d => d.status === "unassigned").length} onCheckedChange={toggleSelectAll} />
+                  <Checkbox checked={selectedIds.size > 0 && selectedIds.size === generatedDiaries.filter(d => d.status === "unassigned").length} onCheckedChange={toggleSelectAll} />
                   <span className="text-sm">Select All Unassigned</span>
                 </div>
                 <Select value={bulkVendor} onValueChange={setBulkVendor}>
                   <SelectTrigger className="w-52 h-8"><SelectValue placeholder="Bulk assign to vendor..." /></SelectTrigger>
                   <SelectContent>
-                    {activeVendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name} — {v.location}</SelectItem>)}
+                    {vendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name} — {v.location}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Button size="sm" onClick={handleBulkAssign} disabled={!bulkVendor || selectedIds.size === 0}>Assign Selected ({selectedIds.size})</Button>
@@ -291,7 +446,7 @@ export default function SuperAdminDiaryInventory() {
             </CardHeader>
             <CardContent>
               <Accordion type="multiple" className="space-y-1">
-                {lastGenerated.map(diary => (
+                {generatedDiaries.map(diary => (
                   <AccordionItem key={diary.id} value={diary.id} className="border rounded-lg px-3">
                     <AccordionTrigger className="hover:no-underline py-3">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -303,7 +458,7 @@ export default function SuperAdminDiaryInventory() {
                           />
                         )}
                         <span className="font-mono font-bold text-sm">{diary.id}</span>
-                        <Badge variant="secondary" className="capitalize text-xs">{diaryTypeMap[diary.type]?.label}</Badge>
+                        <Badge variant="secondary" className="capitalize text-xs">{diaryTypeMap[diary.diaryType]?.label}</Badge>
                         <Badge variant="outline" className={`text-xs capitalize ${statusColors[diary.status]}`}>{diary.status}</Badge>
                         {diary.assignedVendorId && (
                           <span className="text-xs text-muted-foreground">→ {vendors.find(v => v.id === diary.assignedVendorId)?.name}</span>
@@ -322,12 +477,12 @@ export default function SuperAdminDiaryInventory() {
                         </div>
                         <div className="space-y-2 text-sm flex-1">
                           <p><span className="text-muted-foreground">Diary ID:</span> <span className="font-mono font-medium">{diary.id}</span></p>
-                          <p><span className="text-muted-foreground">Type:</span> <span className="capitalize">{diary.type}</span></p>
+                          <p><span className="text-muted-foreground">Type:</span> <span className="capitalize">{diary.diaryType}</span></p>
                           <p><span className="text-muted-foreground">Generated:</span> {new Date(diary.generatedDate).toLocaleString()}</p>
                           <p><span className="text-muted-foreground">Status:</span> <span className="capitalize">{diary.status}</span></p>
                           {diary.status === "unassigned" && (
                             <div className="flex items-center gap-2 mt-3">
-                              <AssignDropdown vendors={activeVendors} onAssign={(vendorId) => handleAssignSingle(diary.id, vendorId)} />
+                              <AssignDropdown vendors={vendors} onAssign={(vendorId) => handleAssignSingle(diary.id, vendorId)} />
                             </div>
                           )}
                         </div>
@@ -350,7 +505,7 @@ export default function SuperAdminDiaryInventory() {
                   <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Types</SelectItem>
-                    {Object.entries(diaryTypeMap).filter(([,v]) => v.enabled).map(([k,v]) => (
+                    {Object.entries(diaryTypeMap).filter(([, v]) => v.enabled).map(([k, v]) => (
                       <SelectItem key={k} value={k}>{v.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -368,7 +523,7 @@ export default function SuperAdminDiaryInventory() {
                   <SelectTrigger className="h-8 w-48"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Vendors</SelectItem>
-                    {activeVendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+                    {vendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <div className="relative">
@@ -392,12 +547,12 @@ export default function SuperAdminDiaryInventory() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allDiaries.length === 0 ? (
+                    {generatedDiaries.length === 0 ? (
                       <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No diaries match filters</TableCell></TableRow>
-                    ) : allDiaries.map(d => (
+                    ) : generatedDiaries.map(d => (
                       <TableRow key={d.id} className="hover:bg-muted/30">
                         <TableCell className="font-mono text-xs font-medium">{d.id}</TableCell>
-                        <TableCell><Badge variant="secondary" className="capitalize text-xs">{diaryTypeMap[d.type]?.label}</Badge></TableCell>
+                        <TableCell><Badge variant="secondary" className="capitalize text-xs">{diaryTypeMap[d.diaryType]?.label}</Badge></TableCell>
                         <TableCell className="text-xs">{new Date(d.generatedDate).toLocaleDateString()}</TableCell>
                         <TableCell><Badge variant="outline" className={`text-xs capitalize ${statusColors[d.status]}`}>{d.status}</Badge></TableCell>
                         <TableCell className="text-sm">{d.assignedVendorId ? vendors.find(v => v.id === d.assignedVendorId)?.name : "Not Assigned"}</TableCell>
@@ -428,7 +583,7 @@ export default function SuperAdminDiaryInventory() {
             {currentRequest && (
               <div className="space-y-3">
                 <p className="text-sm"><span className="text-muted-foreground">Vendor:</span> <span className="font-medium">{currentRequest.vendorName} ({currentRequest.vendorId})</span></p>
-                <p className="text-sm"><span className="text-muted-foreground">Diary Type:</span> <span className="capitalize font-medium">{currentRequest.type}</span></p>
+                <p className="text-sm"><span className="text-muted-foreground">Diary Type:</span> <span className="capitalize font-medium">{currentRequest.diaryType}</span></p>
                 <p className="text-sm"><span className="text-muted-foreground">Quantity:</span> <span className="font-bold">{currentRequest.quantity}</span></p>
                 <p className="text-sm"><span className="text-muted-foreground">Request Date:</span> {currentRequest.requestDate}</p>
                 {currentRequest.message && <p className="text-sm"><span className="text-muted-foreground">Message:</span> "{currentRequest.message}"</p>}

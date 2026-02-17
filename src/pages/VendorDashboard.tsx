@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { useData } from "@/contexts/DataContext";
@@ -8,6 +8,7 @@ import {
   ShoppingBag, Wallet, TrendingUp, QrCode,
   Phone, CheckCircle2, ArrowRight, Download, UserPlus, Stethoscope,
   Eye, Receipt, IndianRupee, Package,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import type { DiaryType } from "@/data/mockData";
+import StaffStepperDialog from "@/components/ui/StaffStepperDialog";
+import axios from "axios";
 
 const navItems = [
   { label: "New Sale", path: "/vendor", icon: ShoppingBag },
@@ -65,7 +68,7 @@ export default function VendorDashboard() {
   // Sales filters
   const [salesDiaryTypeFilter, setSalesDiaryTypeFilter] = useState("all");
   const [statementOpen, setStatementOpen] = useState(false);
-
+  const [submitting, setSubmitting] = useState(false)
   const vendorDiaries = diaries.filter(d => d.vendorId === "V001");
   const todaySales = vendorDiaries.filter(d => d.status === "active").length;
   const totalSalesAmount = vendorDiaries.filter(d => d.status === "active").length * 500;
@@ -75,20 +78,89 @@ export default function VendorDashboard() {
     setPatientPhone(""); setPatientAddress(""); setSelectedDoctor(""); setPaymentConfirmed(false); setSaleComplete(false);
   };
 
-  const handleOnboardDoctor = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    setOnboardedDoctors(prev => [...prev, {
-      name: fd.get("name") as string,
-      hospital: fd.get("hospital") as string,
-      phone: fd.get("phone") as string,
-      status: "Pending",
-      date: new Date().toISOString().split("T")[0],
-    }]);
-    setAddDoctorOpen(false);
-    toast({ title: "Doctor submitted!", description: "Pending Super Admin approval." });
+  const handleAddDoctor = async (data: any) => {
+    setSubmitting(true);
+    try {
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      await axios.post(
+        `${BASE_URL}/api/v1/admin/create-staff`,
+        {
+          fullName: data.name,
+          email: data.email,
+          phone: data.phone,
+          hospital: data.hospital,
+          specialization: data.specialization,
+          role: "DOCTOR",
+          bank: {
+            accountHolder: data.accountHolder,
+            accountNumber: data.accountNumber,
+            ifsc: data.ifsc,
+          },
+          commissionType: data.commissionType,
+          commissionRate: parseFloat(data.commissionRate),
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      toast({
+        title: "Doctor Created Successfully",
+        description: "Credentials sent to email. Cashfree vendor registered.",
+      });
+      setAddDoctorOpen(false);
+      window.location.reload();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to create doctor",
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  useEffect(() => {
+    const fetchDoctors = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
+
+        const response = await axios.get(
+          `${BASE_URL}/api/v1/doctors/getDoctorsByVendor`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const apiDoctors = response.data.data.doctors;
+
+        setDoctors(
+          apiDoctors.map((doc: any) => ({
+            id: doc.id,
+            role: "doctor",
+            name: doc.fullName,
+            email: doc.email,
+            phone: doc.phone,
+            hospital: doc.hospital,
+            license: doc.license,
+            specialization: doc.specialization,
+            status: "active",
+            totalPatients: doc.stats?.totalPatients || 0,
+            totalAssistants: doc.stats?.totalAssistants || 0,
+            createdDate: new Date(doc.createdAt).toLocaleDateString(),
+          }))
+        );
+      } catch (error) {
+        console.error("Error fetching doctors", error);
+      }
+    };
+
+    fetchDoctors();
+  }, []);
   // ========== NEW SALE ==========
   if (currentPage === "/vendor" || currentPage === "/vendor/") {
     const renderStep = () => {
@@ -263,7 +335,7 @@ export default function VendorDashboard() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-display font-bold">Onboard Doctor</h2>
-            <Dialog open={addDoctorOpen} onOpenChange={setAddDoctorOpen}>
+            {/* <Dialog open={addDoctorOpen} onOpenChange={setAddDoctorOpen}>
               <DialogTrigger asChild>
                 <Button className="gradient-teal text-primary-foreground"><UserPlus className="h-4 w-4 mr-1" />Add New Doctor</Button>
               </DialogTrigger>
@@ -280,7 +352,15 @@ export default function VendorDashboard() {
                   <DialogFooter><Button type="submit" className="gradient-teal text-primary-foreground">Submit for Approval</Button></DialogFooter>
                 </form>
               </DialogContent>
-            </Dialog>
+            </Dialog> */}
+            <StaffStepperDialog
+              type="DOCTOR"
+              open={addDoctorOpen}
+              onOpenChange={setAddDoctorOpen}
+              onSubmit={handleAddDoctor}
+              isSubmitting={submitting}
+            />
+            <Button className="gradient-teal text-primary-foreground" onClick={() => setAddDoctorOpen(true)}><UserPlus className="h-4 w-4 mr-1" />Add New Doctor</Button>
           </div>
 
           <Card>

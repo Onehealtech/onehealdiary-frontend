@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import axios from "axios";
+import StaffStepperDialog from "@/components/ui/StaffStepperDialog";
 
 const navItems = [
   { label: "User Management", path: "/super-admin", icon: Users },
@@ -43,14 +44,11 @@ export default function SuperAdminDashboard() {
   const [auditActionFilter, setAuditActionFilter] = useState("all");
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   const currentPage = location.pathname;
-
-  const handleAddDoctor = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const fd = new FormData(e.currentTarget);
-
+  const handleAddDoctor = async (data: any) => {
+    setSubmitting(true);
     try {
       const BASE_URL = import.meta.env.VITE_API_BASE_URL;
       const token = localStorage.getItem("token");
@@ -58,34 +56,37 @@ export default function SuperAdminDashboard() {
       await axios.post(
         `${BASE_URL}/api/v1/admin/create-staff`,
         {
-          fullName: fd.get("name"),
-          email: fd.get("email"),
-          phone: fd.get("phone"),
+          fullName: data.name,
+          email: data.email,
+          phone: data.phone,
+          hospital: data.hospital,
+          specialization: data.specialization,
           role: "DOCTOR",
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
+          bank: {
+            accountHolder: data.accountHolder,
+            accountNumber: data.accountNumber,
+            ifsc: data.ifsc,
           },
-        }
+          commissionType: data.commissionType,
+          commissionRate: parseFloat(data.commissionRate),
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       toast({
         title: "Doctor Created Successfully",
-        description: "Credentials sent to email.",
+        description: "Credentials sent to email. Cashfree vendor registered.",
       });
-
       setAddDoctorOpen(false);
-
-      // Refresh doctors list
       window.location.reload();
-
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.response?.data?.message || "Failed to create doctor",
         variant: "destructive",
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -136,7 +137,7 @@ export default function SuperAdminDashboard() {
             role: "SUPER_ADMIN",
             name: admin.fullName,
             email: admin.email,
-            phone: "", // backend not returning phone yet
+            phone: admin.phone, // backend not returning phone yet
             createdDate: new Date(admin.createdAt).toLocaleDateString(),
             status: "active",
           }))
@@ -173,9 +174,9 @@ export default function SuperAdminDashboard() {
             name: doc.fullName,
             email: doc.email,
             phone: doc.phone,
-            hospital: "—",
-            license: "—",
-            specialization: "General",
+            hospital: doc.hospital,
+            license: doc.license,
+            specialization: doc.specialization,
             status: "active",
             totalPatients: doc.stats?.totalPatients || 0,
             totalAssistants: doc.stats?.totalAssistants || 0,
@@ -213,8 +214,8 @@ export default function SuperAdminDashboard() {
             name: vendor.fullName,
             email: vendor.email,
             phone: vendor.phone,
-            location: "—", // not coming from API
-            gst: "—", // not coming
+            location: vendor.location, // not coming from API
+            gst: vendor.GST, // not coming
             bankDetails: "",
             walletBalance: 0,
             diariesSold: 0,
@@ -231,11 +232,8 @@ export default function SuperAdminDashboard() {
     fetchVendors();
   }, []);
 
-  const handleAddVendor = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const fd = new FormData(e.currentTarget);
-
+  const handleAddVendor = async (data: any) => {
+    setSubmitting(true);
     try {
       const BASE_URL = import.meta.env.VITE_API_BASE_URL;
       const token = localStorage.getItem("token");
@@ -243,35 +241,40 @@ export default function SuperAdminDashboard() {
       await axios.post(
         `${BASE_URL}/api/v1/admin/create-staff`,
         {
-          fullName: fd.get("name"),
-          email: fd.get("email"),
-          phone: fd.get("phone"),
+          fullName: data.name,
+          email: data.email,
+          phone: data.phone,
+          location: data.location,
+          gst: data.gst,
           role: "VENDOR",
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
+          bank: {
+            accountHolder: data.accountHolder,
+            accountNumber: data.accountNumber,
+            ifsc: data.ifsc,
           },
-        }
+          commissionType: data.commissionType,
+          commissionRate: parseFloat(data.commissionRate),
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       toast({
         title: "Vendor Created Successfully",
-        description: "Credentials sent to email.",
+        description: "Credentials sent to email. Cashfree vendor registered.",
       });
-
       setAddVendorOpen(false);
-
       window.location.reload();
-
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.response?.data?.message || "Failed to create vendor",
         variant: "destructive",
       });
+    } finally {
+      setSubmitting(false);
     }
   };
+
 
 
   const handleAddAdmin = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -295,6 +298,7 @@ export default function SuperAdminDashboard() {
         {
           fullName: fd.get("name"),
           email: fd.get("email"),
+          phone: fd.get("phone"),
           password: password,
         }
       );
@@ -335,6 +339,7 @@ export default function SuperAdminDashboard() {
     v.email.toLowerCase().includes(search.toLowerCase())
   );
 
+
   const filteredDiaries = filterStatus === "all" ? diaries : diaries.filter(d => d.status === filterStatus);
   const filteredAuditLogs = auditLogs
     .filter(l => auditRoleFilter === "all" || l.role.toLowerCase() === auditRoleFilter)
@@ -367,7 +372,7 @@ export default function SuperAdminDashboard() {
                   <form onSubmit={handleAddAdmin} className="space-y-3">
                     <div><Label>Name *</Label><Input name="name" required /></div>
                     <div><Label>Email *</Label><Input name="email" type="email" required /></div>
-                    {/* <div><Label>Phone Number *</Label><Input name="phone" placeholder="+91-" required /></div> */}
+                    <div><Label>Phone Number *</Label><Input name="phone" placeholder="+91-" required /></div>
                     <div><Label>Password *</Label><Input name="password" type="password" required /></div>
                     <div><Label>Confirm Password *</Label><Input name="confirmPassword" type="password" required /></div>
                     <DialogFooter><Button type="submit" className="gradient-teal text-primary-foreground">Create Admin</Button></DialogFooter>
@@ -399,24 +404,16 @@ export default function SuperAdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-lg font-display">Doctors</CardTitle>
-              <Dialog open={addDoctorOpen} onOpenChange={setAddDoctorOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gradient-teal text-primary-foreground"><Plus className="h-4 w-4 mr-1" />Add Doctor</Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg">
-                  <DialogHeader><DialogTitle>Onboard New Doctor</DialogTitle></DialogHeader>
-                  <form onSubmit={handleAddDoctor} className="space-y-3">
-                    <div><Label>Name *</Label><Input name="name" required /></div>
-                    <div><Label>Email *</Label><Input name="email" type="email" required /></div>
-                    <div><Label>Phone Number *</Label><Input name="phone" placeholder="+91-" required /></div>
-                    {/* <div><Label>Hospital *</Label><Input name="hospital" required /></div> */}
-                    {/* <div><Label>Medical License Number *</Label><Input name="license" required /></div>
-                    <div><Label>License Registration Number *</Label><Input name="licenseReg" required /></div>
-                    <div><Label>Upload License Photo</Label><Input name="licensePhoto" type="file" accept=".jpg,.png,.pdf" className="cursor-pointer" /></div> */}
-                    <DialogFooter><Button type="submit" className="gradient-teal text-primary-foreground">Submit</Button></DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              <StaffStepperDialog
+                type="DOCTOR"
+                open={addDoctorOpen}
+                onOpenChange={setAddDoctorOpen}
+                onSubmit={handleAddDoctor}
+                isSubmitting={submitting}
+              />
+              <Button size="sm" className="gradient-teal text-primary-foreground" onClick={() => setAddDoctorOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />Add Doctor
+              </Button>
             </CardHeader>
             <CardContent>
               <div className="mb-3">
@@ -449,24 +446,17 @@ export default function SuperAdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-lg font-display">Vendors</CardTitle>
-              <Dialog open={addVendorOpen} onOpenChange={setAddVendorOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gradient-teal text-primary-foreground"><Plus className="h-4 w-4 mr-1" />Add Vendor</Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-lg">
-                  <DialogHeader><DialogTitle>Onboard New Vendor</DialogTitle></DialogHeader>
-                  <form onSubmit={handleAddVendor} className="space-y-3">
-                    <div><Label>Vendor Name *</Label><Input name="name" required /></div>
-                    <div><Label>Email *</Label><Input name="email" type="email" required /></div>
-                    <div><Label>Phone Number *</Label><Input name="phone" placeholder="+91-" required /></div>
-                    {/* <div><Label>Location *</Label><Input name="location" required /></div> */}
-                    {/* <div><Label>GST Details *</Label><Input name="gst" placeholder="22AAAAA0000A1Z5" required maxLength={15} /></div>
-                    <div><Label>Bank Account Details</Label><Input name="bank" placeholder="Optional" /></div>
-                    <div><Label>Commission Rate (₹)</Label><Input name="commission" type="number" defaultValue={50} /></div> */}
-                    <DialogFooter><Button type="submit" className="gradient-teal text-primary-foreground">Submit</Button></DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              <StaffStepperDialog
+                type="VENDOR"
+                open={addVendorOpen}
+                onOpenChange={setAddVendorOpen}
+                onSubmit={handleAddVendor}
+                isSubmitting={submitting}
+              />
+
+              <Button size="sm" className="gradient-teal text-primary-foreground" onClick={() => setAddVendorOpen(true)}>
+                <Plus className="h-4 w-4 mr-1" />Add Vendor
+              </Button>
             </CardHeader>
             <CardContent>
               <div className="rounded-lg border overflow-auto">
@@ -475,17 +465,19 @@ export default function SuperAdminDashboard() {
                     <TableRow className="bg-muted/50"><TableHead>Name</TableHead><TableHead>Vendor ID</TableHead><TableHead>Email</TableHead><TableHead>Phone</TableHead><TableHead>GST</TableHead><TableHead>Location</TableHead><TableHead>Status</TableHead></TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredVendors.slice(0, 10).map(v => (
-                      <TableRow key={v.id} className="hover:bg-muted/30">
-                        <TableCell className="font-medium">{v.name}</TableCell>
-                        <TableCell className="font-mono text-xs">{v.id}</TableCell>
-                        <TableCell className="text-sm">{v.email || "—"}</TableCell>
-                        <TableCell>{v.phone}</TableCell>
-                        <TableCell className="font-mono text-xs">{v.gst || "—"}</TableCell>
-                        <TableCell>{v.location}</TableCell>
-                        <TableCell><StatusBadge status={v.status} /></TableCell>
-                      </TableRow>
-                    ))}
+                    {vendors.slice(0, 10).map(v => {
+                      return (
+                        <TableRow key={v.id} className="hover:bg-muted/30">
+                          <TableCell className="font-medium">{v.name}</TableCell>
+                          <TableCell className="font-mono text-xs">{v.id}</TableCell>
+                          <TableCell className="text-sm">{v.email || "—"}</TableCell>
+                          <TableCell>{v.phone}</TableCell>
+                          <TableCell className="font-mono text-xs">{v?.GST || "—"}</TableCell>
+                          <TableCell>{v.location}</TableCell>
+                          <TableCell><StatusBadge status={v.status} /></TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>

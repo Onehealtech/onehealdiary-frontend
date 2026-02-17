@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { useData } from "@/contexts/DataContext";
@@ -34,7 +34,7 @@ const diaryTypeMap: Record<string, { label: string; enabled: boolean }> = {
 };
 
 export default function VendorMyDiaries() {
-  const { generatedDiaries, diaryRequests, setDiaryRequests, setNotifications } = useData();
+  const { generatedDiaries, diaryRequests, setGeneratedDiaries, setDiaryRequests, setNotifications } = useData();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -51,24 +51,57 @@ export default function VendorMyDiaries() {
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchId, setSearchId] = useState("");
-
-  // Request form
+  const [loading, setLoading] = useState(false);
+  // Request form 
   const [reqType, setReqType] = useState<DiaryType | "">("");
   const [reqQty, setReqQty] = useState("");
   const [reqMsg, setReqMsg] = useState("");
 
-  const filteredDiaries = myDiaries
-    .filter(d => filterType === "all" || d.type === filterType)
-    .filter(d => filterStatus === "all" || d.status === filterStatus)
-    .filter(d => !searchId || d.id.toLowerCase().includes(searchId.toLowerCase()));
+  const fetchGeneratedDiaries = async () => {
+    try {
+      setLoading(true);
 
+      const token = localStorage.getItem("token");
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/v1/generated-diaries?vendorId=${user?.id}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to fetch diaries");
+      }
+
+      // IMPORTANT: adjust based on backend structure
+      setGeneratedDiaries(data.data.data);
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    fetchGeneratedDiaries();
+  }, []);
   const handleRequestSubmit = () => {
     if (!reqType || !reqQty || Number(reqQty) < 1) return;
     const newReq = {
       id: `REQ-${Date.now()}`,
       vendorId,
       vendorName: "Rajesh Medical Store",
-      type: reqType,
+      diaryType: reqType,
       quantity: Number(reqQty),
       message: reqMsg || undefined,
       requestDate: new Date().toISOString().split("T")[0],
@@ -119,7 +152,7 @@ export default function VendorMyDiaries() {
                 <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Type" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  {Object.entries(diaryTypeMap).filter(([,v]) => v.enabled).map(([k,v]) => (
+                  {Object.entries(diaryTypeMap).filter(([, v]) => v.enabled).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -152,12 +185,12 @@ export default function VendorMyDiaries() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredDiaries.length === 0 ? (
+                  {generatedDiaries.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No diaries assigned yet. Request diaries from Super Admin below.</TableCell></TableRow>
-                  ) : filteredDiaries.map(d => (
+                  ) : generatedDiaries.map(d => (
                     <TableRow key={d.id} className="hover:bg-muted/30">
                       <TableCell className="font-mono text-xs font-medium">{d.id}</TableCell>
-                      <TableCell><Badge variant="secondary" className="capitalize text-xs">{diaryTypeMap[d.type]?.label}</Badge></TableCell>
+                      <TableCell><Badge variant="secondary" className="capitalize text-xs">{diaryTypeMap[d.diaryType]?.label}</Badge></TableCell>
                       <TableCell className="text-xs">{new Date(d.generatedDate).toLocaleDateString()}</TableCell>
                       <TableCell><Badge variant="outline" className={`text-xs capitalize ${statusColors[d.status] || ""}`}>{d.status === "assigned" ? "Available" : d.status}</Badge></TableCell>
                       <TableCell className="text-sm">{d.patientName || "—"}</TableCell>
@@ -234,14 +267,13 @@ export default function VendorMyDiaries() {
                     {myRequests.map(r => (
                       <TableRow key={r.id} className="hover:bg-muted/30">
                         <TableCell className="text-sm">{r.requestDate}</TableCell>
-                        <TableCell className="capitalize text-sm">{r.type}</TableCell>
+                        <TableCell className="capitalize text-sm">{r.diaryType}</TableCell>
                         <TableCell className="font-medium">{r.quantity}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={`text-xs capitalize ${
-                            r.status === "pending" ? "bg-warning/15 text-warning border-warning/30" :
+                          <Badge variant="outline" className={`text-xs capitalize ${r.status === "pending" ? "bg-warning/15 text-warning border-warning/30" :
                             r.status === "fulfilled" ? "bg-success/15 text-success border-success/30" :
-                            "bg-destructive/15 text-destructive border-destructive/30"
-                          }`}>{r.status}</Badge>
+                              "bg-destructive/15 text-destructive border-destructive/30"
+                            }`}>{r.status}</Badge>
                         </TableCell>
                         <TableCell className="text-sm">{r.fulfilledDate || "—"}</TableCell>
                         <TableCell>

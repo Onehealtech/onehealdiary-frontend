@@ -3,7 +3,7 @@ export interface Doctor {
   id: string; role: "doctor"; name: string; email: string; phone?: string; hospital: string; license: string; licenseRegistration?: string; licensePhoto?: string; specialization: string; status: "active" | "inactive" | "pending";
 }
 export interface Vendor {
-  id: string; role: "vendor"; name: string; email?: string; location: string; phone: string; gst?: string; bankDetails: string; walletBalance: number; diariesSold: number; commissionRate: number; status: "active" | "inactive";
+  id: string; role: "vendor"; name: string; email?: string; location: string; phone: string; GST?: string; bankDetails: string; walletBalance: number; diariesSold: number; commissionRate: number; status: "active" | "inactive";
 }
 export interface Assistant {
   id: string; role: "assistant"; name: string; email: string; doctorId: string; permissions: { viewPatients: boolean; callPatients: boolean; exportData: boolean; sendNotifications: boolean }; status: "active" | "inactive";
@@ -47,7 +47,7 @@ export type DiaryTypeCode = "PO" | "OP" | "FU" | "CH" | "RA";
 
 export interface GeneratedDiary {
   id: string;
-  type: DiaryType;
+  diaryType: DiaryType;
   typeCode: DiaryTypeCode;
   generatedDate: string;
   status: InventoryDiaryStatus;
@@ -59,7 +59,7 @@ export interface DiaryRequest {
   id: string;
   vendorId: string;
   vendorName: string;
-  type: DiaryType;
+  diaryType: DiaryType;
   quantity: number;
   message?: string;
   requestDate: string;
@@ -93,26 +93,26 @@ export const doctors: Doctor[] = [
 ];
 
 export const vendors: Vendor[] = [
-  { id: "V001", role: "vendor", name: "Rajesh Medical Store", email: "rajesh@medical.com", location: "Delhi", phone: "+91-9876543210", gst: "07AAACR1234A1Z5", bankDetails: "HDFC-XXXX1234", walletBalance: 2500, diariesSold: 50, commissionRate: 50, status: "active" },
-  { id: "V002", role: "vendor", name: "MedPlus Pharmacy", email: "medplus@pharma.com", location: "Mumbai", phone: "+91-9876543211", gst: "27AABCM5678B2Z3", bankDetails: "ICICI-XXXX2345", walletBalance: 4200, diariesSold: 84, commissionRate: 50, status: "active" },
-  { id: "V003", role: "vendor", name: "Apollo Pharmacy", email: "apollo@pharma.com", location: "Chennai", phone: "+91-9876543212", gst: "33AADCA9012C3Z1", bankDetails: "SBI-XXXX3456", walletBalance: 1800, diariesSold: 36, commissionRate: 50, status: "active" },
-  { id: "V004", role: "vendor", name: "Netmeds Store", email: "netmeds@store.com", location: "Bangalore", phone: "+91-9876543213", gst: "29AABCN3456D4Z9", bankDetails: "AXIS-XXXX4567", walletBalance: 6500, diariesSold: 100, commissionRate: 50, status: "active" },
-  { id: "V005", role: "vendor", name: "HealthKart", email: "healthkart@hk.com", location: "Kolkata", phone: "+91-9876543214", gst: "19AADCH7890E5Z7", bankDetails: "PNB-XXXX5678", walletBalance: 950, diariesSold: 19, commissionRate: 50, status: "active" },
-  { id: "V006", role: "vendor", name: "PharmEasy Delhi", email: "pharmeasy@pe.com", location: "Delhi", phone: "+91-9876543215", gst: "07AABCP1234F6Z5", bankDetails: "BOB-XXXX6789", walletBalance: 3100, diariesSold: 62, commissionRate: 50, status: "active" },
-  { id: "V007", role: "vendor", name: "MedLife Stores", email: "medlife@ml.com", location: "Hyderabad", phone: "+91-9876543216", gst: "36AADCM5678G7Z3", bankDetails: "KOTAK-XXXX7890", walletBalance: 750, diariesSold: 15, commissionRate: 50, status: "active" },
-  { id: "V008", role: "vendor", name: "Wellness Forever", email: "wellness@wf.com", location: "Pune", phone: "+91-9876543217", gst: "27AABCW9012H8Z1", bankDetails: "HDFC-XXXX8901", walletBalance: 5400, diariesSold: 78, commissionRate: 50, status: "active" },
-  { id: "V009", role: "vendor", name: "Guardian Pharmacy", email: "guardian@gp.com", location: "Chennai", phone: "+91-9876543218", gst: "33AADCG3456I9Z9", bankDetails: "ICICI-XXXX9012", walletBalance: 2200, diariesSold: 44, commissionRate: 50, status: "active" },
-  { id: "V010", role: "vendor", name: "Sanjivani Medical", email: "sanjivani@sm.com", location: "Jaipur", phone: "+91-9876543219", gst: "08AABCS7890J0Z7", bankDetails: "SBI-XXXX0123", walletBalance: 1100, diariesSold: 22, commissionRate: 50, status: "active" },
-  { id: "V011", role: "vendor", name: "City Chemist", email: "city@chemist.com", location: "Mumbai", phone: "+91-9876543220", gst: "27AADCC1234K1Z5", bankDetails: "AXIS-XXXX1234", walletBalance: 8900, diariesSold: 95, commissionRate: 50, status: "active" },
-  { id: "V012", role: "vendor", name: "Lifeline Pharma", email: "lifeline@lp.com", location: "Kolkata", phone: "+91-9876543221", gst: "19AABCL5678L2Z3", bankDetails: "PNB-XXXX2345", walletBalance: 600, diariesSold: 12, commissionRate: 50, status: "active" },
-  { id: "V013", role: "vendor", name: "Cure & Care", email: "cure@care.com", location: "Bangalore", phone: "+91-9876543222", gst: "29AADCC9012M3Z1", bankDetails: "BOB-XXXX3456", walletBalance: 3700, diariesSold: 55, commissionRate: 50, status: "active" },
-  { id: "V014", role: "vendor", name: "Health Hub", email: "health@hub.com", location: "Delhi", phone: "+91-9876543223", gst: "07AABCH3456N4Z9", bankDetails: "KOTAK-XXXX4567", walletBalance: 1500, diariesSold: 30, commissionRate: 50, status: "active" },
-  { id: "V015", role: "vendor", name: "MaxCare Pharmacy", email: "maxcare@mc.com", location: "Chandigarh", phone: "+91-9876543224", gst: "04AADCM7890O5Z7", bankDetails: "HDFC-XXXX5678", walletBalance: 500, diariesSold: 10, commissionRate: 50, status: "active" },
-  { id: "V016", role: "vendor", name: "Dhanwantari Medical", email: "dhanwantari@dm.com", location: "Lucknow", phone: "+91-9876543225", gst: "09AABCD1234P6Z5", bankDetails: "SBI-XXXX6789", walletBalance: 2800, diariesSold: 42, commissionRate: 50, status: "active" },
-  { id: "V017", role: "vendor", name: "Jan Aushadhi", email: "jan@aushadhi.com", location: "Patna", phone: "+91-9876543226", gst: "10AADCJ5678Q7Z3", bankDetails: "ICICI-XXXX7890", walletBalance: 400, diariesSold: 8, commissionRate: 50, status: "inactive" },
-  { id: "V018", role: "vendor", name: "Sri Ram Medicals", email: "sriram@med.com", location: "Hyderabad", phone: "+91-9876543227", gst: "36AABCS9012R8Z1", bankDetails: "AXIS-XXXX8901", walletBalance: 7200, diariesSold: 88, commissionRate: 50, status: "active" },
-  { id: "V019", role: "vendor", name: "Practo Health", email: "practo@health.com", location: "Pune", phone: "+91-9876543228", gst: "27AADCP3456S9Z9", bankDetails: "PNB-XXXX9012", walletBalance: 1900, diariesSold: 38, commissionRate: 50, status: "active" },
-  { id: "V020", role: "vendor", name: "Vaidya Pharmacy", email: "vaidya@pharma.com", location: "Kochi", phone: "+91-9876543229", gst: "32AABCV7890T0Z7", bankDetails: "BOB-XXXX0123", walletBalance: 3300, diariesSold: 66, commissionRate: 50, status: "active" },
+  { id: "V001", role: "vendor", name: "Rajesh Medical Store", email: "rajesh@medical.com", location: "Delhi", phone: "+91-9876543210", GST: "07AAACR1234A1Z5", bankDetails: "HDFC-XXXX1234", walletBalance: 2500, diariesSold: 50, commissionRate: 50, status: "active" },
+  { id: "V002", role: "vendor", name: "MedPlus Pharmacy", email: "medplus@pharma.com", location: "Mumbai", phone: "+91-9876543211", GST: "27AABCM5678B2Z3", bankDetails: "ICICI-XXXX2345", walletBalance: 4200, diariesSold: 84, commissionRate: 50, status: "active" },
+  { id: "V003", role: "vendor", name: "Apollo Pharmacy", email: "apollo@pharma.com", location: "Chennai", phone: "+91-9876543212", GST: "33AADCA9012C3Z1", bankDetails: "SBI-XXXX3456", walletBalance: 1800, diariesSold: 36, commissionRate: 50, status: "active" },
+  { id: "V004", role: "vendor", name: "Netmeds Store", email: "netmeds@store.com", location: "Bangalore", phone: "+91-9876543213", GST: "29AABCN3456D4Z9", bankDetails: "AXIS-XXXX4567", walletBalance: 6500, diariesSold: 100, commissionRate: 50, status: "active" },
+  { id: "V005", role: "vendor", name: "HealthKart", email: "healthkart@hk.com", location: "Kolkata", phone: "+91-9876543214", GST: "19AADCH7890E5Z7", bankDetails: "PNB-XXXX5678", walletBalance: 950, diariesSold: 19, commissionRate: 50, status: "active" },
+  { id: "V006", role: "vendor", name: "PharmEasy Delhi", email: "pharmeasy@pe.com", location: "Delhi", phone: "+91-9876543215", GST: "07AABCP1234F6Z5", bankDetails: "BOB-XXXX6789", walletBalance: 3100, diariesSold: 62, commissionRate: 50, status: "active" },
+  { id: "V007", role: "vendor", name: "MedLife Stores", email: "medlife@ml.com", location: "Hyderabad", phone: "+91-9876543216", GST: "36AADCM5678G7Z3", bankDetails: "KOTAK-XXXX7890", walletBalance: 750, diariesSold: 15, commissionRate: 50, status: "active" },
+  { id: "V008", role: "vendor", name: "Wellness Forever", email: "wellness@wf.com", location: "Pune", phone: "+91-9876543217", GST: "27AABCW9012H8Z1", bankDetails: "HDFC-XXXX8901", walletBalance: 5400, diariesSold: 78, commissionRate: 50, status: "active" },
+  { id: "V009", role: "vendor", name: "Guardian Pharmacy", email: "guardian@gp.com", location: "Chennai", phone: "+91-9876543218", GST: "33AADCG3456I9Z9", bankDetails: "ICICI-XXXX9012", walletBalance: 2200, diariesSold: 44, commissionRate: 50, status: "active" },
+  { id: "V010", role: "vendor", name: "Sanjivani Medical", email: "sanjivani@sm.com", location: "Jaipur", phone: "+91-9876543219", GST: "08AABCS7890J0Z7", bankDetails: "SBI-XXXX0123", walletBalance: 1100, diariesSold: 22, commissionRate: 50, status: "active" },
+  { id: "V011", role: "vendor", name: "City Chemist", email: "city@chemist.com", location: "Mumbai", phone: "+91-9876543220", GST: "27AADCC1234K1Z5", bankDetails: "AXIS-XXXX1234", walletBalance: 8900, diariesSold: 95, commissionRate: 50, status: "active" },
+  { id: "V012", role: "vendor", name: "Lifeline Pharma", email: "lifeline@lp.com", location: "Kolkata", phone: "+91-9876543221", GST: "19AABCL5678L2Z3", bankDetails: "PNB-XXXX2345", walletBalance: 600, diariesSold: 12, commissionRate: 50, status: "active" },
+  { id: "V013", role: "vendor", name: "Cure & Care", email: "cure@care.com", location: "Bangalore", phone: "+91-9876543222", GST: "29AADCC9012M3Z1", bankDetails: "BOB-XXXX3456", walletBalance: 3700, diariesSold: 55, commissionRate: 50, status: "active" },
+  { id: "V014", role: "vendor", name: "Health Hub", email: "health@hub.com", location: "Delhi", phone: "+91-9876543223", GST: "07AABCH3456N4Z9", bankDetails: "KOTAK-XXXX4567", walletBalance: 1500, diariesSold: 30, commissionRate: 50, status: "active" },
+  { id: "V015", role: "vendor", name: "MaxCare Pharmacy", email: "maxcare@mc.com", location: "Chandigarh", phone: "+91-9876543224", GST: "04AADCM7890O5Z7", bankDetails: "HDFC-XXXX5678", walletBalance: 500, diariesSold: 10, commissionRate: 50, status: "active" },
+  { id: "V016", role: "vendor", name: "Dhanwantari Medical", email: "dhanwantari@dm.com", location: "Lucknow", phone: "+91-9876543225", GST: "09AABCD1234P6Z5", bankDetails: "SBI-XXXX6789", walletBalance: 2800, diariesSold: 42, commissionRate: 50, status: "active" },
+  { id: "V017", role: "vendor", name: "Jan Aushadhi", email: "jan@aushadhi.com", location: "Patna", phone: "+91-9876543226", GST: "10AADCJ5678Q7Z3", bankDetails: "ICICI-XXXX7890", walletBalance: 400, diariesSold: 8, commissionRate: 50, status: "inactive" },
+  { id: "V018", role: "vendor", name: "Sri Ram Medicals", email: "sriram@med.com", location: "Hyderabad", phone: "+91-9876543227", GST: "36AABCS9012R8Z1", bankDetails: "AXIS-XXXX8901", walletBalance: 7200, diariesSold: 88, commissionRate: 50, status: "active" },
+  { id: "V019", role: "vendor", name: "Practo Health", email: "practo@health.com", location: "Pune", phone: "+91-9876543228", GST: "27AADCP3456S9Z9", bankDetails: "PNB-XXXX9012", walletBalance: 1900, diariesSold: 38, commissionRate: 50, status: "active" },
+  { id: "V020", role: "vendor", name: "Vaidya Pharmacy", email: "vaidya@pharma.com", location: "Kochi", phone: "+91-9876543229", GST: "32AABCV7890T0Z7", bankDetails: "BOB-XXXX0123", walletBalance: 3300, diariesSold: 66, commissionRate: 50, status: "active" },
 ];
 
 const diaryTypes: DiaryType[] = ["peri-operative", "post-operative", "follow-up", "chemotherapy", "radiology"];
