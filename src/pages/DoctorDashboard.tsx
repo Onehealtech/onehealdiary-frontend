@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import DashboardLayout from "@/layouts/DashboardLayout";
-import { useData } from "@/contexts/DataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import StatCard from "@/components/common/StatCard";
 import StatusBadge from "@/components/common/StatusBadge";
 import {
   Users, BookOpen, Activity, Search, Phone, Eye, ArrowLeft,
-  Send, UserPlus, Plus, Settings, Download, Bell, FileText,
-  ClipboardCheck, CheckCircle2, Trash2, Edit, Calendar as CalendarIcon,
-  Image, FileDown,
+  Send, Plus, Settings, Download, Bell, FileText,
+  ClipboardCheck, CheckCircle2, Trash2,
+  Image, FileDown, Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,10 @@ import { useToast } from "@/hooks/use-toast";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import type { TaskType, TaskPriority } from "@/data/mockData";
+import axios from "axios";
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const authHeaders = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
 
 const navItems = [
   { label: "Dashboard", path: "/doctor", icon: Activity },
@@ -37,47 +40,123 @@ const navItems = [
   { label: "Reports", path: "/doctor/reports", icon: FileText },
 ];
 
-const taskTypeOptions: { value: TaskType; label: string }[] = [
-  { value: "review_entries", label: "Review Diary Entries" },
-  { value: "send_notifications", label: "Send Patient Notifications" },
-  { value: "follow_up_calls", label: "Follow-up Calls" },
-  { value: "schedule_appointments", label: "Schedule Appointments" },
-  { value: "data_entry", label: "Data Entry" },
-  { value: "patient_checkin", label: "Patient Check-in" },
-  { value: "lab_report_followup", label: "Lab Report Follow-up" },
+const taskTypeOptions = [
+  { value: "review-entries", label: "Review Diary Entries" },
+  { value: "call-patients", label: "Call Patients" },
+  { value: "send-reminders", label: "Send Reminders" },
+  { value: "follow-up", label: "Follow-up" },
+  { value: "export-data", label: "Export Data" },
   { value: "other", label: "Other" },
 ];
 
-const priorityOptions: { value: TaskPriority; label: string; color: string; icon: string }[] = [
+const priorityOptions = [
   { value: "low", label: "Low", color: "text-blue-500", icon: "🔵" },
   { value: "medium", label: "Medium", color: "text-yellow-500", icon: "🟡" },
   { value: "high", label: "High", color: "text-orange-500", icon: "🟠" },
   { value: "urgent", label: "Urgent", color: "text-red-500", icon: "🔴" },
 ];
 
+// --- Normalize API responses to frontend-compatible format ---
+const mapPatient = (p: any) => ({
+  id: p.id,
+  name: p.fullName || p.name || "—",
+  age: p.age ?? "—",
+  gender: p.gender || "—",
+  phone: p.phone || p.phoneNumber || "—",
+  address: p.address || "",
+  diaryId: p.diaryId || "—",
+  diaryType: p.diaryType || undefined,
+  doctorId: p.doctorId || "",
+  vendorId: p.vendorId || "",
+  registeredDate: p.createdAt ? new Date(p.createdAt).toISOString().split("T")[0] : "—",
+  status: "active" as const,
+  stage: p.stage || "—",
+  lastEntry: "—",
+  treatmentPlan: p.treatmentPlan || "—",
+  prescribedTests: p.prescribedTests || [],
+  testCompletionPercentage: p.testCompletionPercentage || 0,
+});
+
+const mapEntry = (e: any, idx: number) => ({
+  id: e.id,
+  patientId: e.patientId,
+  diaryId: e.pageId || "—",
+  pageNumber: idx + 1,
+  uploadDate: e.scannedAt ? new Date(e.scannedAt).toISOString().split("T")[0] : e.createdAt ? new Date(e.createdAt).toISOString().split("T")[0] : "—",
+  parsedData: {
+    painLevel: e.scanData?.painLevel ?? 0,
+    nausea: e.scanData?.nausea ?? false,
+    fever: e.scanData?.fever ?? false,
+    appetite: e.scanData?.appetite ?? "—",
+    sleepQuality: e.scanData?.sleepQuality ?? "—",
+    medications: e.scanData?.medications ?? [],
+  },
+  flagged: e.flagged ?? false,
+  doctorReviewed: e.doctorReviewed ?? false,
+  pageType: e.pageType || "—",
+  imageUrl: e.imageUrl,
+  patient: e.patient,
+});
+
+const mapAssistant = (a: any) => ({
+  id: a.id,
+  role: "assistant" as const,
+  name: a.fullName || a.name || "—",
+  email: a.email || "—",
+  phone: a.phone || "",
+  doctorId: a.parentId || "",
+  permissions: { viewPatients: true, callPatients: true, exportData: false, sendNotifications: false },
+  status: (a.isEmailVerified !== false ? "active" : "inactive") as "active" | "inactive",
+});
+
+const mapTask = (t: any) => ({
+  id: t.id,
+  title: t.title || "—",
+  description: t.description,
+  taskType: t.taskType || "other",
+  assignedTo: t.assignedTo || "",
+  assignedBy: t.creator?.fullName || "—",
+  priority: t.priority || "medium",
+  dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split("T")[0] : "—",
+  status: t.status || "pending",
+  patientIds: t.relatedPatientIds || [],
+  completedDate: t.completedAt ? new Date(t.completedAt).toISOString().split("T")[0] : undefined,
+  createdDate: t.createdAt ? new Date(t.createdAt).toISOString().split("T")[0] : "—",
+  assigneeName: t.assignee?.fullName,
+});
+
 export default function DoctorDashboard() {
-  const { patients, diaryEntries, assistants, setAssistants, tasks, setTasks } = useData();
+  const { user } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
   const currentPage = location.pathname;
 
+  // ---- API data state ----
+  const [dashboardStats, setDashboardStats] = useState<any>(null);
+  const [myPatients, setMyPatients] = useState<any[]>([]);
+  const [allEntries, setAllEntries] = useState<any[]>([]);
+  const [myAssistants, setMyAssistants] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [apiNotifications, setApiNotifications] = useState<any[]>([]);
+  const [recentExports, setRecentExports] = useState<any[]>([]);
+  const [patientEntries, setPatientEntries] = useState<any[]>([]);
+
+  // ---- UI state ----
+  const [loading, setLoading] = useState(true);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [diaryTypeFilter, setDiaryTypeFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState("all");
-  const [lastEntryFilter, setLastEntryFilter] = useState("all");
   const [addAssistantOpen, setAddAssistantOpen] = useState(false);
-  const [notifSearch, setNotifSearch] = useState("");
   const [notifMessage, setNotifMessage] = useState("");
   const [notifRecipient, setNotifRecipient] = useState("");
-  const [bulkPatients, setBulkPatients] = useState<string[]>([]);
+  const [bulkFilter, setBulkFilter] = useState<string | null>(null);
 
   // Task form state
   const [taskTitle, setTaskTitle] = useState("");
   const [taskDesc, setTaskDesc] = useState("");
-  const [taskType, setTaskType] = useState<TaskType | "">("");
+  const [taskType, setTaskType] = useState("");
   const [taskAssignee, setTaskAssignee] = useState("");
-  const [taskPriority, setTaskPriority] = useState<TaskPriority>("medium");
+  const [taskPriority, setTaskPriority] = useState("medium");
   const [taskDueDate, setTaskDueDate] = useState("");
   const [taskPatients, setTaskPatients] = useState<string[]>([]);
 
@@ -89,20 +168,321 @@ export default function DoctorDashboard() {
   const [reportDateTo, setReportDateTo] = useState("");
   const [reportIncludes, setReportIncludes] = useState({ demographics: true, treatment: true, entries: true, symptoms: true, medications: true, appointments: true });
   const [selectedPhotoPages, setSelectedPhotoPages] = useState<string[]>([]);
-  const [recentExports, setRecentExports] = useState<{ patient: string; type: string; date: string; range: string; size: string }[]>([]);
   const [generating, setGenerating] = useState(false);
 
-  const myPatients = patients.filter(p => p.doctorId === "D001");
-  const allEntries = diaryEntries.filter(e => myPatients.some(p => p.id === e.patientId));
-  const pendingReviews = allEntries.filter(e => !e.doctorReviewed).length;
-  const myAssistants = assistants.filter(a => a.doctorId === "D001");
+  // ==================== DATA FETCHING ====================
+
+  // Fetch dashboard stats
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/api/v1/dashboard/doctor`, authHeaders());
+        setDashboardStats(res.data.data);
+      } catch (err) {
+        console.error("Error fetching dashboard stats:", err);
+      }
+    };
+    fetchDashboard();
+  }, []);
+
+  // Fetch patients
+  useEffect(() => {
+    const fetchPatients = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/api/v1/dashboard/patients?limit=200`, authHeaders());
+        const data = res.data.data?.patients || res.data.data || [];
+        setMyPatients(data.map(mapPatient));
+      } catch (err) {
+        console.error("Error fetching patients:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPatients();
+  }, []);
+
+  // Fetch diary entries
+  useEffect(() => {
+    const fetchEntries = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/api/v1/diary-entries/?limit=200`, authHeaders());
+        const entries = res.data.data?.entries || res.data.data || [];
+        setAllEntries(entries.map((e: any, i: number) => mapEntry(e, i)));
+      } catch (err) {
+        console.error("Error fetching diary entries:", err);
+      }
+    };
+    fetchEntries();
+  }, []);
+
+  // Fetch assistants
+  useEffect(() => {
+    const fetchAssistants = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/api/v1/assistants/?limit=100`, authHeaders());
+        const data = res.data.data?.assistants || res.data.data || [];
+        setMyAssistants(Array.isArray(data) ? data.map(mapAssistant) : []);
+      } catch (err) {
+        console.error("Error fetching assistants:", err);
+      }
+    };
+    fetchAssistants();
+  }, []);
+
+  // Fetch tasks
+  useEffect(() => {
+    const fetchTasks = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/api/v1/tasks/?limit=100`, authHeaders());
+        const data = res.data.data?.data || res.data.data || [];
+        setTasks(Array.isArray(data) ? data.map(mapTask) : []);
+      } catch (err) {
+        console.error("Error fetching tasks:", err);
+      }
+    };
+    fetchTasks();
+  }, []);
+
+  // Fetch notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/api/v1/notifications/?limit=50`, authHeaders());
+        const data = res.data.data?.notifications || res.data.data || [];
+        setApiNotifications(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+      }
+    };
+    fetchNotifications();
+  }, []);
+
+  // Fetch exports
+  useEffect(() => {
+    const fetchExports = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/api/v1/reports/exports?limit=20`, authHeaders());
+        const data = res.data.data?.exports || res.data.data || [];
+        setRecentExports(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error fetching exports:", err);
+      }
+    };
+    fetchExports();
+  }, []);
+
+  // Fetch patient detail + diary entries when a patient is selected
+  useEffect(() => {
+    if (!selectedPatientId) {
+      setPatientEntries([]);
+      return;
+    }
+    const fetchDetail = async () => {
+      try {
+        const [pRes, eRes] = await Promise.all([
+          axios.get(`${BASE_URL}/api/v1/patient/${selectedPatientId}`, authHeaders()),
+          axios.get(`${BASE_URL}/api/v1/diary-entries/?patientId=${selectedPatientId}&limit=100`, authHeaders()),
+        ]);
+        const patient = pRes.data.data || pRes.data;
+        // Update the patient in the list with detailed data
+        setMyPatients(prev => prev.map(p => p.id === selectedPatientId ? mapPatient(patient) : p));
+        const entries = eRes.data.data?.entries || eRes.data.data || [];
+        setPatientEntries(entries.map((e: any, i: number) => mapEntry(e, i)));
+      } catch (err) {
+        console.error("Error fetching patient detail:", err);
+        // Fallback: filter entries from allEntries
+        setPatientEntries(allEntries.filter(e => e.patientId === selectedPatientId));
+      }
+    };
+    fetchDetail();
+  }, [selectedPatientId]);
+
+  // ==================== HANDLERS ====================
+
+  const handleAddAssistant = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    try {
+      await axios.post(`${BASE_URL}/api/v1/doctor/create-assistant`, {
+        fullName: fd.get("name") as string,
+        email: fd.get("email") as string,
+        phone: (fd.get("phone") as string) || undefined,
+      }, authHeaders());
+      toast({ title: "Assistant created! Credentials sent to email." });
+      setAddAssistantOpen(false);
+      // Refresh assistants
+      const res = await axios.get(`${BASE_URL}/api/v1/assistants/?limit=100`, authHeaders());
+      const data = res.data.data?.assistants || res.data.data || [];
+      setMyAssistants(Array.isArray(data) ? data.map(mapAssistant) : []);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to create assistant", variant: "destructive" });
+    }
+  };
+
+  const resetTaskForm = () => {
+    setTaskTitle(""); setTaskDesc(""); setTaskType(""); setTaskAssignee(""); setTaskPriority("medium"); setTaskDueDate(""); setTaskPatients([]);
+  };
+
+  const handleCreateTask = async () => {
+    if (!taskTitle || !taskType || !taskAssignee || !taskDueDate) return;
+    try {
+      await axios.post(`${BASE_URL}/api/v1/tasks/`, {
+        title: taskTitle,
+        description: taskDesc || undefined,
+        taskType: taskType,
+        assignedTo: taskAssignee,
+        priority: taskPriority,
+        dueDate: taskDueDate,
+        relatedPatients: taskPatients.length > 0 ? taskPatients : undefined,
+      }, authHeaders());
+      toast({ title: "Task assigned successfully!" });
+      resetTaskForm();
+      // Refresh tasks
+      const res = await axios.get(`${BASE_URL}/api/v1/tasks/?limit=100`, authHeaders());
+      const data = res.data.data?.data || res.data.data || [];
+      setTasks(Array.isArray(data) ? data.map(mapTask) : []);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to create task", variant: "destructive" });
+    }
+  };
+
+  const handleCompleteTask = async (taskId: string) => {
+    try {
+      // Doctors use PUT /tasks/:id with status update (the /complete endpoint is ASSISTANT-only)
+      await axios.put(`${BASE_URL}/api/v1/tasks/${taskId}`, { status: "completed" }, authHeaders());
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: "completed", completedDate: new Date().toISOString().split("T")[0] } : t));
+      toast({ title: "Task completed!" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to complete task", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      await axios.delete(`${BASE_URL}/api/v1/tasks/${taskId}`, authHeaders());
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+      toast({ title: "Task deleted" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to delete task", variant: "destructive" });
+    }
+  };
+
+  const handleMarkReviewed = async (entryId: string) => {
+    try {
+      await axios.put(`${BASE_URL}/api/v1/diary-entries/${entryId}/review`, {}, authHeaders());
+      setPatientEntries(prev => prev.map(e => e.id === entryId ? { ...e, doctorReviewed: true } : e));
+      setAllEntries(prev => prev.map(e => e.id === entryId ? { ...e, doctorReviewed: true } : e));
+      toast({ title: "Entry marked as reviewed" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to mark as reviewed", variant: "destructive" });
+    }
+  };
+
+  const handleSendNotification = async () => {
+    if (!notifMessage) return;
+    try {
+      if (bulkFilter) {
+        const filters: any = {};
+        if (bulkFilter === "all") filters.allPatients = true;
+        else filters.diaryType = bulkFilter;
+        await axios.post(`${BASE_URL}/api/v1/notifications/bulk`, {
+          type: "reminder",
+          title: "Notification from Doctor",
+          message: notifMessage,
+          filters,
+        }, authHeaders());
+        toast({ title: "Bulk notification sent!" });
+      } else if (notifRecipient) {
+        await axios.post(`${BASE_URL}/api/v1/notifications/`, {
+          recipientId: notifRecipient,
+          recipientType: "patient",
+          type: "reminder",
+          title: "Notification from Doctor",
+          message: notifMessage,
+        }, authHeaders());
+        toast({ title: "Notification sent!" });
+      }
+      setNotifMessage(""); setNotifRecipient(""); setBulkFilter(null);
+      // Refresh notifications
+      const res = await axios.get(`${BASE_URL}/api/v1/notifications/?limit=50`, authHeaders());
+      const data = res.data.data?.notifications || res.data.data || [];
+      setApiNotifications(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to send notification", variant: "destructive" });
+    }
+  };
+
+  const handleGenerateReport = async () => {
+    if (!reportPatient) return;
+    setGenerating(true);
+    try {
+      if (reportExportType === "photos") {
+        await axios.post(`${BASE_URL}/api/v1/reports/patient-data`, {
+          patientId: reportPatient,
+          format: "pdf",
+          includeTestHistory: true,
+          includeDiaryEntries: true,
+        }, authHeaders());
+      } else {
+        await axios.post(`${BASE_URL}/api/v1/reports/patient-data`, {
+          patientId: reportPatient,
+          format: reportFormat === "xlsx" ? "excel" : reportFormat,
+          includeTestHistory: reportIncludes.treatment,
+          includeDiaryEntries: reportIncludes.entries,
+        }, authHeaders());
+      }
+      toast({ title: "Report generation started!", description: "Check Recent Exports for download." });
+      // Refresh exports
+      const res = await axios.get(`${BASE_URL}/api/v1/reports/exports?limit=20`, authHeaders());
+      const data = res.data.data?.exports || res.data.data || [];
+      setRecentExports(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to generate report", variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleDownloadExport = async (exportId: string) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/api/v1/reports/exports/${exportId}/download`, authHeaders());
+      const downloadUrl = res.data.data?.downloadUrl;
+      if (downloadUrl) {
+        window.open(downloadUrl, "_blank");
+      } else {
+        toast({ title: "Export still processing", description: "Please try again later." });
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to download", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteExport = async (exportId: string) => {
+    try {
+      await axios.delete(`${BASE_URL}/api/v1/reports/exports/${exportId}`, authHeaders());
+      setRecentExports(prev => prev.filter(e => e.id !== exportId));
+      toast({ title: "Export deleted" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to delete", variant: "destructive" });
+    }
+  };
+
+  const applyTemplate = (template: { title: string; type: string; priority: string; dueDays: number }) => {
+    setTaskTitle(template.title);
+    setTaskType(template.type);
+    setTaskPriority(template.priority);
+    const due = new Date(); due.setDate(due.getDate() + template.dueDays);
+    setTaskDueDate(due.toISOString().split("T")[0]);
+  };
+
+  // ==================== DERIVED DATA ====================
+  const pendingReviews = dashboardStats?.diaryEntries?.pendingReviews ?? allEntries.filter(e => !e.doctorReviewed).length;
 
   const filteredPatients = myPatients
     .filter(p => diaryTypeFilter === "all" || p.diaryType === diaryTypeFilter)
-    .filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.diaryId.toLowerCase().includes(search.toLowerCase()) || p.phone.includes(search));
+    .filter(p => (p.name || "").toLowerCase().includes(search.toLowerCase()) || (p.diaryId || "").toLowerCase().includes(search.toLowerCase()) || (p.phone || "").includes(search));
 
   const selectedPatient = myPatients.find(p => p.id === selectedPatientId);
-  const patientEntries = diaryEntries.filter(e => e.patientId === selectedPatientId);
 
   const trendData = patientEntries.map(e => ({
     page: `Page ${e.pageNumber}`,
@@ -117,75 +497,21 @@ export default function DoctorDashboard() {
     missed: Math.max(0, 3 - e.parsedData.medications.length),
   }));
 
-  const handleAddAssistant = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    setAssistants(prev => [...prev, {
-      id: `A${String(prev.length + 1).padStart(3, "0")}`,
-      role: "assistant",
-      name: fd.get("name") as string,
-      email: fd.get("email") as string,
-      doctorId: "D001",
-      permissions: {
-        viewPatients: !!fd.get("viewPatients"),
-        callPatients: !!fd.get("callPatients"),
-        exportData: !!fd.get("exportData"),
-        sendNotifications: !!fd.get("sendNotifications"),
-      },
-      status: "active",
-    }]);
-    setAddAssistantOpen(false);
-    toast({ title: "Assistant added!" });
-  };
+  const reportPatientData = myPatients.find(p => p.id === reportPatient);
+  const reportEntries = patientEntries.length > 0 && selectedPatientId === reportPatient
+    ? patientEntries
+    : allEntries.filter(e => e.patientId === reportPatient);
 
-  const resetTaskForm = () => {
-    setTaskTitle(""); setTaskDesc(""); setTaskType(""); setTaskAssignee(""); setTaskPriority("medium"); setTaskDueDate(""); setTaskPatients([]);
-  };
-
-  const handleCreateTask = () => {
-    if (!taskTitle || !taskType || !taskAssignee || !taskDueDate) return;
-    const newTask = {
-      id: `T${String(tasks.length + 1).padStart(3, "0")}`,
-      title: taskTitle,
-      description: taskDesc || undefined,
-      taskType: taskType as TaskType,
-      assignedTo: taskAssignee,
-      assignedBy: "Dr. Priya Sharma",
-      priority: taskPriority,
-      dueDate: taskDueDate,
-      status: "assigned" as const,
-      patientIds: taskPatients.length > 0 ? taskPatients : undefined,
-      createdDate: new Date().toISOString().split("T")[0],
-    };
-    setTasks(prev => [...prev, newTask]);
-    toast({ title: "✅ Task assigned to " + (myAssistants.find(a => a.id === taskAssignee)?.name || "assistant") });
-    resetTaskForm();
-  };
-
-  const applyTemplate = (template: { title: string; type: TaskType; priority: TaskPriority; dueDays: number }) => {
-    setTaskTitle(template.title);
-    setTaskType(template.type);
-    setTaskPriority(template.priority);
-    const due = new Date(); due.setDate(due.getDate() + template.dueDays);
-    setTaskDueDate(due.toISOString().split("T")[0]);
-  };
-
-  const handleGenerateReport = () => {
-    if (!reportPatient) return;
-    setGenerating(true);
-    const patient = myPatients.find(p => p.id === reportPatient);
-    setTimeout(() => {
-      setGenerating(false);
-      setRecentExports(prev => [{
-        patient: patient?.name || "",
-        type: reportExportType === "data" ? "Data Export" : "Photo PDF",
-        date: new Date().toISOString().split("T")[0],
-        range: `${reportDateFrom || "All"} → ${reportDateTo || "All"}`,
-        size: reportExportType === "data" ? "2.4 MB" : "15.8 MB",
-      }, ...prev]);
-      toast({ title: "✅ Report generated successfully", description: "Download started." });
-    }, 2000);
-  };
+  // ==================== LOADING STATE ====================
+  if (loading) {
+    return (
+      <DashboardLayout navItems={navItems} roleLabel="Doctor">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   // ========== PATIENT DETAIL VIEW ==========
   if (selectedPatient) {
@@ -198,7 +524,7 @@ export default function DoctorDashboard() {
             <CardContent className="p-5">
               <div className="flex flex-col sm:flex-row items-start gap-4">
                 <div className="h-16 w-16 rounded-full gradient-brand flex items-center justify-center flex-shrink-0">
-                  <span className="text-xl font-bold text-primary-foreground">{selectedPatient.name.split(" ").map(n => n[0]).join("")}</span>
+                  <span className="text-xl font-bold text-primary-foreground">{selectedPatient.name.split(" ").map((n: string) => n[0]).join("")}</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 flex-wrap">
@@ -218,7 +544,7 @@ export default function DoctorDashboard() {
             <CardContent>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                 <div><span className="text-muted-foreground">Registration Date</span><p className="font-medium">{selectedPatient.registeredDate}</p></div>
-                <div><span className="text-muted-foreground">Assigned Doctor</span><p className="font-medium">Dr. Priya Sharma</p></div>
+                <div><span className="text-muted-foreground">Assigned Doctor</span><p className="font-medium">{user?.fullName || "—"}</p></div>
                 <div><span className="text-muted-foreground">Pages Uploaded</span><p className="font-medium">{patientEntries.length}</p></div>
                 <div><span className="text-muted-foreground">Last Upload</span><p className="font-medium">{patientEntries[patientEntries.length - 1]?.uploadDate || "—"}</p></div>
               </div>
@@ -246,7 +572,7 @@ export default function DoctorDashboard() {
                       <span>Appetite: {entry.parsedData.appetite}</span>
                     </div>
                     {!entry.doctorReviewed && (
-                      <Button size="sm" variant="outline" className="w-full mt-2 text-xs h-7">Mark Reviewed</Button>
+                      <Button size="sm" variant="outline" className="w-full mt-2 text-xs h-7" onClick={() => handleMarkReviewed(entry.id)}>Mark Reviewed</Button>
                     )}
                   </div>
                 ))}
@@ -298,9 +624,9 @@ export default function DoctorDashboard() {
       <DashboardLayout navItems={navItems} roleLabel="Doctor">
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <StatCard title="Total Patients" value={myPatients.length} icon={Users} />
-            <StatCard title="Active Cases" value={myPatients.filter(p => p.status === "active").length} icon={Activity} variant="success" />
-            <StatCard title="This Week's Entries" value={allEntries.length} icon={BookOpen} />
+            <StatCard title="Total Patients" value={dashboardStats?.patients?.total ?? myPatients.length} icon={Users} />
+            <StatCard title="Active Cases" value={dashboardStats?.patients?.activeCases ?? myPatients.length} icon={Activity} variant="success" />
+            <StatCard title="This Week's Entries" value={dashboardStats?.diaryEntries?.thisWeek ?? allEntries.length} icon={BookOpen} />
             <StatCard title="Pending Reviews" value={pendingReviews} icon={ClipboardCheck} variant="warning" />
           </div>
 
@@ -339,7 +665,7 @@ export default function DoctorDashboard() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">
-                        <TableHead>Patient Name</TableHead><TableHead>Age</TableHead><TableHead>Gender</TableHead><TableHead>Diary ID</TableHead><TableHead>Diary Type</TableHead><TableHead>Registered</TableHead><TableHead>Last Entry</TableHead><TableHead>Actions</TableHead>
+                        <TableHead>Patient Name</TableHead><TableHead>Age</TableHead><TableHead>Gender</TableHead><TableHead>Diary ID</TableHead><TableHead>Stage</TableHead><TableHead>Registered</TableHead><TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -349,9 +675,8 @@ export default function DoctorDashboard() {
                           <TableCell>{p.age}</TableCell>
                           <TableCell>{p.gender}</TableCell>
                           <TableCell className="font-mono text-xs">{p.diaryId}</TableCell>
-                          <TableCell><span className="capitalize text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">{p.diaryType || "—"}</span></TableCell>
+                          <TableCell><span className="capitalize text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">{p.stage || "—"}</span></TableCell>
                           <TableCell className="text-sm">{p.registeredDate}</TableCell>
-                          <TableCell className="text-sm">{p.lastEntry}</TableCell>
                           <TableCell>
                             <div className="flex gap-1">
                               <Button size="sm" variant="ghost" className="h-7" onClick={e => { e.stopPropagation(); setSelectedPatientId(p.id); }}><Eye className="h-3 w-3" /></Button>
@@ -384,23 +709,28 @@ export default function DoctorDashboard() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
-                      <TableHead>Patient</TableHead><TableHead>Diary ID</TableHead><TableHead>Page</TableHead><TableHead>Upload Date</TableHead><TableHead>Pain</TableHead><TableHead>Flagged</TableHead><TableHead>Reviewed</TableHead><TableHead>Actions</TableHead>
+                      <TableHead>Patient</TableHead><TableHead>Page Type</TableHead><TableHead>Page</TableHead><TableHead>Upload Date</TableHead><TableHead>Pain</TableHead><TableHead>Flagged</TableHead><TableHead>Reviewed</TableHead><TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {allEntries.map(e => {
-                      const p = myPatients.find(pt => pt.id === e.patientId);
+                      const patientName = e.patient?.name || e.patient?.fullName || myPatients.find(pt => pt.id === e.patientId)?.name || "—";
                       return (
                         <TableRow key={e.id} className="hover:bg-muted/30">
-                          <TableCell className="font-medium">{p?.name || "—"}</TableCell>
-                          <TableCell className="font-mono text-xs">{e.diaryId}</TableCell>
+                          <TableCell className="font-medium">{patientName}</TableCell>
+                          <TableCell><span className="capitalize text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">{e.pageType}</span></TableCell>
                           <TableCell>Page {e.pageNumber}</TableCell>
                           <TableCell className="text-sm">{e.uploadDate}</TableCell>
                           <TableCell>{e.parsedData.painLevel}/10</TableCell>
-                          <TableCell>{e.flagged ? <span className="text-xs text-destructive font-medium">⚠️ Yes</span> : "No"}</TableCell>
-                          <TableCell>{e.doctorReviewed ? <span className="text-xs text-success">✓ Reviewed</span> : <span className="text-xs text-warning">Pending</span>}</TableCell>
+                          <TableCell>{e.flagged ? <span className="text-xs text-destructive font-medium">Yes</span> : "No"}</TableCell>
+                          <TableCell>{e.doctorReviewed ? <span className="text-xs text-success">Reviewed</span> : <span className="text-xs text-warning">Pending</span>}</TableCell>
                           <TableCell>
-                            <Button size="sm" variant="ghost" className="h-7" onClick={() => { if (p) setSelectedPatientId(p.id); }}><Eye className="h-3 w-3" /></Button>
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="ghost" className="h-7" onClick={() => { const p = myPatients.find(pt => pt.id === e.patientId); if (p) setSelectedPatientId(p.id); }}><Eye className="h-3 w-3" /></Button>
+                              {!e.doctorReviewed && (
+                                <Button size="sm" variant="ghost" className="h-7 text-success" onClick={() => handleMarkReviewed(e.id)}><CheckCircle2 className="h-3 w-3" /></Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
@@ -430,15 +760,7 @@ export default function DoctorDashboard() {
                   <form onSubmit={handleAddAssistant} className="space-y-3">
                     <div><Label>Name *</Label><Input name="name" required /></div>
                     <div><Label>Email *</Label><Input name="email" type="email" required /></div>
-                    <div className="space-y-2">
-                      <Label>Permissions</Label>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2"><Checkbox name="viewPatients" id="vp" defaultChecked /><label htmlFor="vp" className="text-sm">Can View Patients</label></div>
-                        <div className="flex items-center gap-2"><Checkbox name="callPatients" id="cp" defaultChecked /><label htmlFor="cp" className="text-sm">Can Call Patients</label></div>
-                        <div className="flex items-center gap-2"><Checkbox name="exportData" id="ed" /><label htmlFor="ed" className="text-sm">Can Export Data</label></div>
-                        <div className="flex items-center gap-2"><Checkbox name="sendNotifications" id="sn" /><label htmlFor="sn" className="text-sm">Can Send Notifications</label></div>
-                      </div>
-                    </div>
+                    <div><Label>Phone</Label><Input name="phone" type="tel" /></div>
                     <DialogFooter><Button type="submit" className="gradient-teal text-primary-foreground">Create</Button></DialogFooter>
                   </form>
                 </DialogContent>
@@ -447,20 +769,15 @@ export default function DoctorDashboard() {
             <CardContent>
               <div className="rounded-lg border overflow-auto">
                 <Table>
-                  <TableHeader><TableRow className="bg-muted/50"><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Permissions</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="bg-muted/50"><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Phone</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {myAssistants.map(a => (
+                    {myAssistants.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No assistants yet. Create one to get started.</TableCell></TableRow>
+                    ) : myAssistants.map(a => (
                       <TableRow key={a.id}>
                         <TableCell className="font-medium">{a.name}</TableCell>
                         <TableCell>{a.email}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1 flex-wrap">
-                            {a.permissions.viewPatients && <span className="text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">View</span>}
-                            {a.permissions.callPatients && <span className="text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">Call</span>}
-                            {a.permissions.exportData && <span className="text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">Export</span>}
-                            {a.permissions.sendNotifications && <span className="text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">Notify</span>}
-                          </div>
-                        </TableCell>
+                        <TableCell>{a.phone || "—"}</TableCell>
                         <TableCell><StatusBadge status={a.status} /></TableCell>
                       </TableRow>
                     ))}
@@ -476,14 +793,14 @@ export default function DoctorDashboard() {
 
   // ========== TASK ASSIGNMENT ==========
   if (currentPage.includes("/tasks")) {
-    const activeTasks = tasks.filter(t => t.status !== "completed");
+    const activeTasks = tasks.filter(t => t.status !== "completed" && t.status !== "cancelled");
     const completedTasks = tasks.filter(t => t.status === "completed");
 
     const quickTemplates = [
-      { icon: "📋", title: "Review Today's Diary Updates", template: { title: "Review all diary entries uploaded today", type: "review_entries" as TaskType, priority: "medium" as TaskPriority, dueDays: 0 } },
-      { icon: "💊", title: "Send Chemotherapy Reminders", template: { title: "Send reminders to patients with chemotherapy this week", type: "send_notifications" as TaskType, priority: "high" as TaskPriority, dueDays: 1 } },
-      { icon: "📞", title: "Follow-up with New Patients", template: { title: "Call patients registered in the last 7 days", type: "follow_up_calls" as TaskType, priority: "medium" as TaskPriority, dueDays: 1 } },
-      { icon: "⚠️", title: "Check Missed Diary Entries", template: { title: "Contact patients who haven't made entries in 3+ days", type: "follow_up_calls" as TaskType, priority: "medium" as TaskPriority, dueDays: 0 } },
+      { icon: "📋", title: "Review Today's Diary Updates", template: { title: "Review all diary entries uploaded today", type: "review-entries", priority: "medium", dueDays: 0 } },
+      { icon: "💊", title: "Send Chemotherapy Reminders", template: { title: "Send reminders to patients with chemotherapy this week", type: "send-reminders", priority: "high", dueDays: 1 } },
+      { icon: "📞", title: "Follow-up with New Patients", template: { title: "Call patients registered in the last 7 days", type: "call-patients", priority: "medium", dueDays: 1 } },
+      { icon: "⚠️", title: "Check Missed Diary Entries", template: { title: "Contact patients who haven't made entries in 3+ days", type: "follow-up", priority: "medium", dueDays: 0 } },
     ];
 
     return (
@@ -516,7 +833,7 @@ export default function DoctorDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label>Task Type *</Label>
-                  <Select value={taskType} onValueChange={v => setTaskType(v as TaskType)}>
+                  <Select value={taskType} onValueChange={setTaskType}>
                     <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                     <SelectContent>{taskTypeOptions.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
                   </Select>
@@ -588,14 +905,14 @@ export default function DoctorDashboard() {
                               <TableRow key={t.id} className="hover:bg-muted/30">
                                 <TableCell className="font-medium">{t.title}</TableCell>
                                 <TableCell><span className="text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">{taskTypeOptions.find(o => o.value === t.taskType)?.label || t.taskType}</span></TableCell>
-                                <TableCell>{assignee?.name || "—"}</TableCell>
+                                <TableCell>{t.assigneeName || assignee?.name || "—"}</TableCell>
                                 <TableCell><span className="text-xs">{priorityOptions.find(p => p.value === t.priority)?.icon} {t.priority}</span></TableCell>
                                 <TableCell className={isOverdue ? "text-destructive font-medium" : ""}>{isOverdue ? "Overdue: " : ""}{t.dueDate}</TableCell>
-                                <TableCell><StatusBadge status={t.status === "assigned" ? "pending" : t.status === "in_progress" ? "active" : "active"} /></TableCell>
+                                <TableCell><StatusBadge status={t.status === "pending" ? "pending" : "active"} /></TableCell>
                                 <TableCell>
                                   <div className="flex gap-1">
-                                    <Button size="sm" variant="ghost" className="h-7" onClick={() => { setTasks(prev => prev.map(task => task.id === t.id ? { ...task, status: "completed", completedDate: new Date().toISOString().split("T")[0] } : task)); toast({ title: "Task completed!" }); }}><CheckCircle2 className="h-3 w-3" /></Button>
-                                    <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => { setTasks(prev => prev.filter(task => task.id !== t.id)); toast({ title: "Task deleted" }); }}><Trash2 className="h-3 w-3" /></Button>
+                                    <Button size="sm" variant="ghost" className="h-7" onClick={() => handleCompleteTask(t.id)}><CheckCircle2 className="h-3 w-3" /></Button>
+                                    <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => handleDeleteTask(t.id)}><Trash2 className="h-3 w-3" /></Button>
                                   </div>
                                 </TableCell>
                               </TableRow>
@@ -624,7 +941,7 @@ export default function DoctorDashboard() {
                               <TableRow key={t.id} className="hover:bg-muted/30">
                                 <TableCell className="font-medium">{t.title}</TableCell>
                                 <TableCell><span className="text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">{taskTypeOptions.find(o => o.value === t.taskType)?.label || t.taskType}</span></TableCell>
-                                <TableCell>{assignee?.name || "—"}</TableCell>
+                                <TableCell>{t.assigneeName || assignee?.name || "—"}</TableCell>
                                 <TableCell>{t.completedDate || "—"}</TableCell>
                                 <TableCell><Button size="sm" variant="ghost" className="h-7"><Eye className="h-3 w-3" /></Button></TableCell>
                               </TableRow>
@@ -653,19 +970,19 @@ export default function DoctorDashboard() {
             <CardContent className="space-y-4">
               <div>
                 <Label>To Individual Patient</Label>
-                <Select value={notifRecipient} onValueChange={setNotifRecipient}>
+                <Select value={notifRecipient} onValueChange={v => { setNotifRecipient(v); setBulkFilter(null); }}>
                   <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
                   <SelectContent>{myPatients.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Or Bulk Select</Label>
+                <Label>Or Bulk Send</Label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
-                  <Button size="sm" variant="outline" onClick={() => setBulkPatients(myPatients.map(p => p.id))}>Select All</Button>
-                  <Button size="sm" variant="outline" onClick={() => setBulkPatients(myPatients.filter(p => p.diaryType === "chemotherapy").map(p => p.id))}>Chemotherapy</Button>
-                  <Button size="sm" variant="outline" onClick={() => setBulkPatients(myPatients.filter(p => p.diaryType === "peri-operative").map(p => p.id))}>Peri-Operative</Button>
+                  <Button size="sm" variant={bulkFilter === "all" ? "default" : "outline"} onClick={() => { setBulkFilter("all"); setNotifRecipient(""); }}>All Patients</Button>
+                  <Button size="sm" variant={bulkFilter === "chemotherapy" ? "default" : "outline"} onClick={() => { setBulkFilter("chemotherapy"); setNotifRecipient(""); }}>Chemotherapy</Button>
+                  <Button size="sm" variant={bulkFilter === "peri-operative" ? "default" : "outline"} onClick={() => { setBulkFilter("peri-operative"); setNotifRecipient(""); }}>Peri-Operative</Button>
                 </div>
-                {bulkPatients.length > 0 && <p className="text-xs text-muted-foreground mt-1">Sending to {bulkPatients.length} patients</p>}
+                {bulkFilter && <p className="text-xs text-muted-foreground mt-1">Sending to: {bulkFilter === "all" ? "All patients" : `${bulkFilter} patients`}</p>}
               </div>
               <div>
                 <Label>Template</Label>
@@ -679,7 +996,7 @@ export default function DoctorDashboard() {
                 </Select>
               </div>
               <div><Label>Message</Label><Textarea placeholder="Type your message..." className="min-h-[100px]" value={notifMessage} onChange={e => setNotifMessage(e.target.value)} /><p className="text-xs text-muted-foreground mt-1">{notifMessage.length}/500</p></div>
-              <Button className="gradient-teal text-primary-foreground" onClick={() => { toast({ title: "Notification sent!" }); setNotifMessage(""); setNotifRecipient(""); setBulkPatients([]); }}><Send className="h-4 w-4 mr-2" />Send</Button>
+              <Button className="gradient-teal text-primary-foreground" onClick={handleSendNotification} disabled={!notifMessage || (!notifRecipient && !bulkFilter)}><Send className="h-4 w-4 mr-2" />Send</Button>
             </CardContent>
           </Card>
 
@@ -688,10 +1005,18 @@ export default function DoctorDashboard() {
             <CardContent>
               <div className="rounded-lg border overflow-auto">
                 <Table>
-                  <TableHeader><TableRow className="bg-muted/50"><TableHead>Date/Time</TableHead><TableHead>Recipients</TableHead><TableHead>Message</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="bg-muted/50"><TableHead>Date/Time</TableHead><TableHead>Type</TableHead><TableHead>Message</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    <TableRow><TableCell className="text-sm">2024-02-10 14:30</TableCell><TableCell>3 patients</TableCell><TableCell className="text-sm text-muted-foreground">Appointment reminder for next week...</TableCell><TableCell><StatusBadge status="active" /></TableCell></TableRow>
-                    <TableRow><TableCell className="text-sm">2024-02-09 10:00</TableCell><TableCell>Sunita Devi</TableCell><TableCell className="text-sm text-muted-foreground">Lab report is ready for collection...</TableCell><TableCell><StatusBadge status="active" /></TableCell></TableRow>
+                    {apiNotifications.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No notifications yet.</TableCell></TableRow>
+                    ) : apiNotifications.map(n => (
+                      <TableRow key={n.id}>
+                        <TableCell className="text-sm">{n.createdAt ? new Date(n.createdAt).toLocaleString() : "—"}</TableCell>
+                        <TableCell><span className="capitalize text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">{n.type}</span></TableCell>
+                        <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{n.message}</TableCell>
+                        <TableCell><StatusBadge status={n.read ? "active" : "pending"} /></TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
@@ -703,9 +1028,6 @@ export default function DoctorDashboard() {
   }
 
   // ========== REPORTS ==========
-  const reportPatientData = myPatients.find(p => p.id === reportPatient);
-  const reportEntries = diaryEntries.filter(e => e.patientId === reportPatient);
-
   return (
     <DashboardLayout navItems={navItems} roleLabel="Doctor">
       <div className="space-y-6">
@@ -720,7 +1042,7 @@ export default function DoctorDashboard() {
               <SelectContent>
                 {myPatients.map(p => (
                   <SelectItem key={p.id} value={p.id}>
-                    {p.name} — {p.diaryId} ({p.diaryType || "N/A"})
+                    {p.name} — {p.diaryId} ({p.stage || "N/A"})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -730,15 +1052,15 @@ export default function DoctorDashboard() {
               <div className="mt-4 p-4 bg-muted/30 rounded-lg border">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-full gradient-brand flex items-center justify-center">
-                    <span className="text-sm font-bold text-primary-foreground">{reportPatientData.name.split(" ").map(n => n[0]).join("")}</span>
+                    <span className="text-sm font-bold text-primary-foreground">{reportPatientData.name.split(" ").map((n: string) => n[0]).join("")}</span>
                   </div>
                   <div>
                     <p className="font-bold">{reportPatientData.name}</p>
                     <p className="text-sm text-muted-foreground">{reportPatientData.age}y · {reportPatientData.gender} · {reportPatientData.diaryId}</p>
                   </div>
                   <div className="ml-auto text-right text-sm">
-                    <p><span className="text-muted-foreground">Type:</span> <span className="capitalize">{reportPatientData.diaryType}</span></p>
-                    <p><span className="text-muted-foreground">Entries:</span> {reportEntries.length}</p>
+                    <p><span className="text-muted-foreground">Stage:</span> <span className="capitalize">{reportPatientData.stage}</span></p>
+                    <p><span className="text-muted-foreground">Tests:</span> {reportPatientData.testCompletionPercentage}% complete</p>
                   </div>
                 </div>
               </div>
@@ -750,7 +1072,7 @@ export default function DoctorDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Data Export */}
             <Card className={`cursor-pointer border-2 transition-all ${reportExportType === "data" ? "border-secondary" : "border-border"}`} onClick={() => setReportExportType("data")}>
-              <CardHeader><CardTitle className="text-base flex items-center gap-2"><FileDown className="h-5 w-5" />📊 Export Diary Entry Data</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base flex items-center gap-2"><FileDown className="h-5 w-5" />Export Diary Entry Data</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <div className="space-y-2">
                   {Object.entries(reportIncludes).map(([key, val]) => (
@@ -767,7 +1089,7 @@ export default function DoctorDashboard() {
                 <div className="flex gap-2">
                   {["pdf", "xlsx", "csv"].map(f => (
                     <button key={f} onClick={e => { e.stopPropagation(); setReportFormat(f); }} className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${reportFormat === f ? "border-secondary bg-secondary/10 text-secondary" : "border-border"}`}>
-                      {f === "pdf" ? "📄 PDF" : f === "xlsx" ? "📊 Excel" : "📑 CSV"}
+                      {f === "pdf" ? "PDF" : f === "xlsx" ? "Excel" : "CSV"}
                     </button>
                   ))}
                 </div>
@@ -781,19 +1103,19 @@ export default function DoctorDashboard() {
 
             {/* Photo Export */}
             <Card className={`cursor-pointer border-2 transition-all ${reportExportType === "photos" ? "border-secondary" : "border-border"}`} onClick={() => setReportExportType("photos")}>
-              <CardHeader><CardTitle className="text-base flex items-center gap-2"><Image className="h-5 w-5" />📸 Export Diary Page Photos</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base flex items-center gap-2"><Image className="h-5 w-5" />Export Diary Page Photos</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">{reportEntries.length} pages available</p>
                 <div className="grid grid-cols-4 gap-2">
                   {reportEntries.slice(0, 8).map(e => (
-                    <div key={e.id} onClick={ev => { ev.stopPropagation(); setSelectedPhotoPages(prev => prev.includes(e.id) ? prev.filter(id => id !== e.id) : [...prev, e.id]); }} className={`p-2 rounded border text-center cursor-pointer transition-all ${selectedPhotoPages.includes(e.id) ? "border-secondary bg-secondary/10" : "border-border"}`}>
+                    <div key={e.id} onClick={ev => { ev.stopPropagation(); setSelectedPhotoPages(prev => prev.includes(e.id) ? prev.filter((id: string) => id !== e.id) : [...prev, e.id]); }} className={`p-2 rounded border text-center cursor-pointer transition-all ${selectedPhotoPages.includes(e.id) ? "border-secondary bg-secondary/10" : "border-border"}`}>
                       <BookOpen className="h-6 w-6 text-muted-foreground/40 mx-auto" />
                       <p className="text-[10px] mt-1">P{e.pageNumber}</p>
                     </div>
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Checkbox checked={selectedPhotoPages.length === reportEntries.length} onCheckedChange={c => setSelectedPhotoPages(c ? reportEntries.map(e => e.id) : [])} />
+                  <Checkbox checked={selectedPhotoPages.length === reportEntries.length && reportEntries.length > 0} onCheckedChange={c => setSelectedPhotoPages(c ? reportEntries.map((e: any) => e.id) : [])} />
                   <span className="text-sm">Select All Pages</span>
                   {selectedPhotoPages.length > 0 && <span className="text-xs text-muted-foreground ml-auto">{selectedPhotoPages.length} selected</span>}
                 </div>
@@ -816,19 +1138,19 @@ export default function DoctorDashboard() {
             ) : (
               <div className="rounded-lg border overflow-auto">
                 <Table>
-                  <TableHeader><TableRow className="bg-muted/50"><TableHead>Patient</TableHead><TableHead>Report Type</TableHead><TableHead>Generated</TableHead><TableHead>Date Range</TableHead><TableHead>Size</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="bg-muted/50"><TableHead>Type</TableHead><TableHead>Format</TableHead><TableHead>Generated</TableHead><TableHead>Status</TableHead><TableHead>Size</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {recentExports.map((exp, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{exp.patient}</TableCell>
-                        <TableCell>{exp.type}</TableCell>
-                        <TableCell className="text-sm">{exp.date}</TableCell>
-                        <TableCell className="text-sm">{exp.range}</TableCell>
-                        <TableCell className="text-sm">{exp.size}</TableCell>
+                    {recentExports.map((exp) => (
+                      <TableRow key={exp.id}>
+                        <TableCell className="font-medium capitalize">{exp.type?.replace(/-/g, " ") || "—"}</TableCell>
+                        <TableCell className="uppercase text-xs">{exp.format || "—"}</TableCell>
+                        <TableCell className="text-sm">{exp.createdAt ? new Date(exp.createdAt).toLocaleDateString() : "—"}</TableCell>
+                        <TableCell><StatusBadge status={exp.status === "completed" ? "active" : "pending"} /></TableCell>
+                        <TableCell className="text-sm">{exp.fileSize ? `${(exp.fileSize / 1024 / 1024).toFixed(1)} MB` : "—"}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button size="sm" variant="ghost" className="h-7" onClick={() => toast({ title: "Downloading..." })}><Download className="h-3 w-3" /></Button>
-                            <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => setRecentExports(prev => prev.filter((_, idx) => idx !== i))}><Trash2 className="h-3 w-3" /></Button>
+                            <Button size="sm" variant="ghost" className="h-7" onClick={() => handleDownloadExport(exp.id)} disabled={exp.status !== "completed"}><Download className="h-3 w-3" /></Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => handleDeleteExport(exp.id)}><Trash2 className="h-3 w-3" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
