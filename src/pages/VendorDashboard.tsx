@@ -714,7 +714,7 @@ export default function VendorDashboard() {
 
               <Button
                 className="w-full gradient-teal text-primary-foreground"
-                onClick={() => { handleAdvancePayment(500); setAdvanceModalOpen(false) }}
+                onClick={() => { handleAdvancePayment(5000); setAdvanceModalOpen(false) }}
               >
                 Add Advance ₹5000
               </Button>
