@@ -224,17 +224,23 @@ export default function AssistantDashboard() {
       return;
     }
     const fetchDetail = async () => {
-      try {
-        const [pRes, eRes] = await Promise.all([
-          axios.get(`${BASE_URL}/api/v1/patient/${selectedPatientId}`, authHeaders()),
-          axios.get(`${BASE_URL}/api/v1/diary-entries/?patientId=${selectedPatientId}&limit=100`, authHeaders()),
-        ]);
-        const patient = pRes.data.data || pRes.data;
+      const [pRes, eRes] = await Promise.allSettled([
+        axios.get(`${BASE_URL}/api/v1/patient/${selectedPatientId}`, authHeaders()),
+        axios.get(`${BASE_URL}/api/v1/diary-entries/?patientId=${selectedPatientId}&limit=100`, authHeaders()),
+      ]);
+
+      if (pRes.status === "fulfilled") {
+        const patient = pRes.value.data.data || pRes.value.data;
         setMyPatients(prev => prev.map(p => p.id === selectedPatientId ? mapPatient(patient) : p));
-        const entries = eRes.data.data?.entries || eRes.data.data || [];
+      } else {
+        console.error("Error fetching patient detail:", pRes.reason);
+      }
+
+      if (eRes.status === "fulfilled") {
+        const entries = eRes.value.data.data?.entries || eRes.value.data.data || [];
         setPatientEntries(entries.map((e: any, i: number) => mapEntry(e, i)));
-      } catch (err) {
-        console.error("Error fetching patient detail:", err);
+      } else {
+        console.error("Error fetching diary entries:", eRes.reason);
         setPatientEntries(allEntries.filter(e => e.patientId === selectedPatientId));
       }
     };

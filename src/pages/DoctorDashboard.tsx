@@ -280,33 +280,39 @@ export default function DoctorDashboard() {
       return;
     }
     const fetchDetail = async () => {
-      try {
-        // Get diaryId from already-loaded patients list to call image-history
-        const diaryId = myPatients.find(p => p.id === selectedPatientId)?.diaryId;
+      const diaryId = myPatients.find(p => p.id === selectedPatientId)?.diaryId;
 
-        const requests: Promise<any>[] = [
-          axios.get(`${BASE_URL}/api/v1/patient/${selectedPatientId}`, authHeaders()),
-          axios.get(`${BASE_URL}/api/v1/diary-entries/?patientId=${selectedPatientId}&limit=100`, authHeaders()),
-        ];
-        // Only fetch image history if we have a valid diaryId
-        if (diaryId && diaryId !== "—") {
-          requests.push(axios.get(`${BASE_URL}/api/v1/upload/image-history/${diaryId}`, authHeaders()));
-        }
+      // Fetch each resource independently so one failure doesn't block the others
+      const [pRes, eRes, imgRes] = await Promise.allSettled([
+        axios.get(`${BASE_URL}/api/v1/patient/${selectedPatientId}`, authHeaders()),
+        axios.get(`${BASE_URL}/api/v1/diary-entries/?patientId=${selectedPatientId}&limit=100`, authHeaders()),
+        diaryId && diaryId !== "—"
+          ? axios.get(`${BASE_URL}/api/v1/upload/image-history/${diaryId}`, authHeaders())
+          : Promise.reject("no-diary-id"),
+      ]);
 
-        const [pRes, eRes, imgRes] = await Promise.all(requests);
-        const patient = pRes.data.data || pRes.data;
-        // Update the patient in the list with detailed data
+      // Patient detail
+      if (pRes.status === "fulfilled") {
+        const patient = pRes.value.data.data || pRes.value.data;
         setMyPatients(prev => prev.map(p => p.id === selectedPatientId ? mapPatient(patient) : p));
-        const entries = eRes.data.data?.entries || eRes.data.data || [];
+      } else {
+        console.error("Error fetching patient detail:", pRes.reason);
+      }
+
+      // Diary entries
+      if (eRes.status === "fulfilled") {
+        const entries = eRes.value.data.data?.entries || eRes.value.data.data || [];
         setPatientEntries(entries.map((e: any, i: number) => mapEntry(e, i)));
-        // Set photo history if the API was called
-        if (imgRes) {
-          setPhotoHistory(imgRes.data.data || []);
-        }
-      } catch (err) {
-        console.error("Error fetching patient detail:", err);
-        // Fallback: filter entries from allEntries
+      } else {
+        console.error("Error fetching diary entries:", eRes.reason);
         setPatientEntries(allEntries.filter(e => e.patientId === selectedPatientId));
+      }
+
+      // Photo history
+      if (imgRes.status === "fulfilled") {
+        setPhotoHistory(imgRes.value.data.data || []);
+      } else if (imgRes.reason !== "no-diary-id") {
+        console.error("Error fetching photo history:", imgRes.reason);
       }
     };
     fetchDetail();
