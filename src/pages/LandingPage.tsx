@@ -15,10 +15,8 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen gradient-hero flex flex-col">
       <header className="p-6 flex items-center gap-2">
-        <div className="h-10 w-10 rounded-xl bg-accent flex items-center justify-center">
-          <span className="font-display font-bold text-accent-foreground">OH</span>
-        </div>
-        <span className="font-display font-bold text-xl text-primary-foreground">OneHeal</span>
+        <img src="/logo.png" alt="Elvantia" className="h-10 w-10 rounded-xl object-contain" />
+        <span className="font-display font-bold text-xl text-primary-foreground">Elvantia</span>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-4 pb-20">
@@ -58,7 +56,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="text-center py-4 text-primary-foreground/40 text-xs">
-        © 2024 OneHeal. All rights reserved. This is a demo application.
+        © 2025 Elvantia. All rights reserved.
       </footer>
     </div>
   );

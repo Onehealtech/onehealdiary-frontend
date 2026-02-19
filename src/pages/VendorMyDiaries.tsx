@@ -5,7 +5,7 @@ import { useData } from "@/contexts/DataContext";
 import StatCard from "@/components/common/StatCard";
 import QRCode from "react-qr-code";
 import {
-  ShoppingBag, Wallet, TrendingUp, Package, Search, Download, Send, Eye, Stethoscope, Clock,
+  ShoppingBag, Wallet, TrendingUp, Package, Search, Download, Send, Eye, Stethoscope, Clock, QrCode,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import type { DiaryType } from "@/data/mockData";
 import axios from "axios";
@@ -55,6 +56,7 @@ export default function VendorMyDiaries() {
   const [reqQty, setReqQty] = useState("");
   const [reqMsg, setReqMsg] = useState("");
   const [dashboardData, setDashboardData] = useState<any>();
+  const [qrDiary, setQrDiary] = useState<any>(null);
   const fetchGeneratedDiaries = async () => {
     try {
       setLoading(true);
@@ -195,6 +197,14 @@ export default function VendorMyDiaries() {
     inactive: "bg-muted text-muted-foreground border-border",
   };
 
+  const filteredDiaries = generatedDiaries
+    .filter(d => filterType === "all" || d.diaryType === filterType)
+    .filter(d => filterStatus === "all" || d.status === filterStatus)
+    .filter(d => !searchId ||
+      d.id?.toLowerCase().includes(searchId.toLowerCase()) ||
+      d.patientName?.toLowerCase().includes(searchId.toLowerCase())
+    );
+
   return (
     <DashboardLayout navItems={navItems} roleLabel="Vendor">
       <div className="space-y-6">
@@ -252,7 +262,9 @@ export default function VendorMyDiaries() {
                 <TableBody>
                   {generatedDiaries.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No diaries assigned yet. Request diaries from Super Admin below.</TableCell></TableRow>
-                  ) : generatedDiaries.map(d => (
+                  ) : filteredDiaries.length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No diaries match the selected filters.</TableCell></TableRow>
+                  ) : filteredDiaries.map(d => (
                     <TableRow key={d.id} className="hover:bg-muted/30">
                       <TableCell className="font-mono text-xs font-medium">{d.id}</TableCell>
                       <TableCell><Badge variant="secondary" className="capitalize text-xs">{diaryTypeMap[d.diaryType]?.label}</Badge></TableCell>
@@ -261,7 +273,9 @@ export default function VendorMyDiaries() {
                       <TableCell className="text-sm">{d.patientName || "—"}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button size="sm" variant="ghost" className="h-7 text-xs"><Eye className="h-3 w-3 mr-1" />QR</Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setQrDiary(d)}>
+                            <QrCode className="h-3 w-3 mr-1" />QR
+                          </Button>
                           {d.status === "assigned" && (
                             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => navigate(`/vendor?diaryId=${d.id}`)}>
                               Sell Diary
@@ -361,6 +375,66 @@ export default function VendorMyDiaries() {
           </Card>
         )}
       </div>
+
+      {/* QR Code Dialog */}
+      <Dialog open={!!qrDiary} onOpenChange={(open) => { if (!open) setQrDiary(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5" />
+              Diary QR Code
+            </DialogTitle>
+          </DialogHeader>
+          {qrDiary && (
+            <div className="flex flex-col items-center gap-4 py-2">
+              <div id="qr-dialog" className="p-4 bg-white rounded-xl border">
+                <QRCode
+                  value={qrDiary.serialNumber || qrDiary.id}
+                  size={200}
+                  level="M"
+                />
+              </div>
+              <div className="w-full space-y-1 text-sm text-center">
+                <p className="font-mono font-semibold text-base">{qrDiary.serialNumber || qrDiary.id}</p>
+                <p className="text-muted-foreground capitalize">{diaryTypeMap[qrDiary.diaryType]?.label || qrDiary.diaryType}</p>
+                <Badge variant="outline" className={`text-xs capitalize ${statusColors[qrDiary.status] || ""}`}>
+                  {qrDiary.status === "assigned" ? "Available" : qrDiary.status}
+                </Badge>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  const svg = document.querySelector("#qr-dialog svg") as SVGElement;
+                  if (!svg) return;
+                  const size = 300;
+                  const svgData = new XMLSerializer().serializeToString(svg);
+                  const canvas = document.createElement("canvas");
+                  canvas.width = size;
+                  canvas.height = size;
+                  const ctx = canvas.getContext("2d")!;
+                  const img = new Image();
+                  const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  img.onload = () => {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, size, size);
+                    ctx.drawImage(img, 0, 0, size, size);
+                    const a = document.createElement("a");
+                    a.download = `qr-${qrDiary.serialNumber || qrDiary.id}.png`;
+                    a.href = canvas.toDataURL("image/png");
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  };
+                  img.src = url;
+                }}
+              >
+                <Download className="h-4 w-4 mr-2" />Download QR (PNG)
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

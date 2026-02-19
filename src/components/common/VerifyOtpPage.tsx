@@ -72,7 +72,9 @@ export default function VerifyOtpPage() {
                         <Input
                             value={otp}
                             onChange={(e) => setOtp(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && handleVerify()}
                             placeholder="Enter 6 digit OTP"
+                            maxLength={6}
                         />
                     </div>
 

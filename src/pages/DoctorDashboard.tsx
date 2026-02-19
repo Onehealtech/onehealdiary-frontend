@@ -141,6 +141,7 @@ export default function DoctorDashboard() {
   const [recentExports, setRecentExports] = useState<any[]>([]);
   const [patientEntries, setPatientEntries] = useState<any[]>([]);
   const [photoHistory, setPhotoHistory] = useState<any[]>([]);
+  const [lightboxPhoto, setLightboxPhoto] = useState<{ id?: string; fileName: string; imagePath?: string; url?: string; imageUrl?: string; createdAt?: string } | null>(null);
 
   // ---- UI state ----
   const [loading, setLoading] = useState(true);
@@ -170,6 +171,13 @@ export default function DoctorDashboard() {
   const [reportIncludes, setReportIncludes] = useState({ demographics: true, treatment: true, entries: true, symptoms: true, medications: true, appointments: true });
   const [selectedPhotoPages, setSelectedPhotoPages] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
+
+  // Clear selected patient when navigating away from the root doctor page
+  useEffect(() => {
+    if (currentPage !== "/doctor" && currentPage !== "/doctor/") {
+      setSelectedPatientId(null);
+    }
+  }, [currentPage]);
 
   // ==================== DATA FETCHING ====================
 
@@ -628,28 +636,41 @@ export default function DoctorDashboard() {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {photoHistory.map((photo: any, idx: number) => (
-                    <div
-                      key={photo.id || idx}
-                      className="group relative rounded-lg overflow-hidden border bg-muted aspect-square cursor-pointer"
-                      onClick={() => window.open(`/uploads/${photo.fileName}`, "_blank")}
-                    >
-                      <img
-                        src={`/uploads/${photo.fileName}`}
-                        alt={`Diary photo ${idx + 1}`}
-                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                        onError={(e) => {
-                          e.currentTarget.style.display = "none";
-                          (e.currentTarget.parentElement as HTMLElement).classList.add("flex", "items-center", "justify-center");
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end">
-                        <span className="w-full text-[10px] text-white bg-black/50 px-1.5 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
-                          {photo.createdAt ? new Date(photo.createdAt).toLocaleDateString() : photo.fileName}
-                        </span>
+                  {photoHistory.map((photo: { id?: string; fileName: string; imagePath?: string; url?: string; imageUrl?: string; createdAt?: string }, idx: number) => {
+                    const src = photo.imagePath?.startsWith("http") ? photo.imagePath
+                      : photo.imagePath?.startsWith("/uploads/") ? photo.imagePath
+                      : photo.url?.startsWith("http") ? photo.url
+                      : photo.imageUrl?.startsWith("http") ? photo.imageUrl
+                      : `/uploads/${photo.fileName}`;
+                    return (
+                      <div
+                        key={photo.id || idx}
+                        className="group relative rounded-lg overflow-hidden border bg-muted aspect-square cursor-pointer"
+                        onClick={() => setLightboxPhoto(photo)}
+                      >
+                        <img
+                          src={src}
+                          alt={`Diary photo ${idx + 1}`}
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                            if (fallback) fallback.style.display = "flex";
+                          }}
+                        />
+                        {/* Shown when image fails to load */}
+                        <div style={{ display: "none" }} className="absolute inset-0 flex-col items-center justify-center gap-1 text-muted-foreground/50 bg-muted">
+                          <Image className="h-6 w-6" />
+                          <span className="text-[10px]">Not available</span>
+                        </div>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end pointer-events-none">
+                          <span className="w-full text-[10px] text-white bg-black/50 px-1.5 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                            {photo.createdAt ? new Date(photo.createdAt).toLocaleDateString() : photo.fileName}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -689,6 +710,48 @@ export default function DoctorDashboard() {
             </Card>
           </div>
         </div>
+
+        {/* Photo Lightbox */}
+        <Dialog open={!!lightboxPhoto} onOpenChange={(open) => { if (!open) setLightboxPhoto(null); }}>
+          <DialogContent className="max-w-2xl p-2">
+            <DialogHeader className="px-4 pt-2">
+              <DialogTitle className="text-sm font-medium text-muted-foreground">
+                {lightboxPhoto?.createdAt
+                  ? new Date(lightboxPhoto.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                  : lightboxPhoto?.fileName}
+              </DialogTitle>
+            </DialogHeader>
+            {lightboxPhoto && (() => {
+              const src = lightboxPhoto.imagePath?.startsWith("http") ? lightboxPhoto.imagePath
+                : lightboxPhoto.imagePath?.startsWith("/uploads/") ? lightboxPhoto.imagePath
+                : lightboxPhoto.url?.startsWith("http") ? lightboxPhoto.url
+                : lightboxPhoto.imageUrl?.startsWith("http") ? lightboxPhoto.imageUrl
+                : `/uploads/${lightboxPhoto.fileName}`;
+              return (
+                <div className="relative bg-black/5 rounded-lg overflow-hidden flex items-center justify-center min-h-64">
+                  <img
+                    src={src}
+                    alt="Diary photo"
+                    className="max-w-full max-h-[70vh] object-contain rounded"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                      const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = "flex";
+                    }}
+                  />
+                  <div style={{ display: "none" }} className="absolute inset-0 flex-col items-center justify-center gap-3 text-muted-foreground">
+                    <Image className="h-12 w-12 opacity-30" />
+                    <p className="text-sm font-medium">Image not available</p>
+                    <p className="text-xs text-center max-w-xs opacity-70">
+                      This image may have been uploaded to a different server.<br />
+                      Ensure the mobile app is pointing to this backend ({import.meta.env.VITE_API_BASE_URL}).
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+          </DialogContent>
+        </Dialog>
       </DashboardLayout>
     );
   }

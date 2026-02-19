@@ -57,10 +57,8 @@ export default function DashboardLayout({ children, navItems, roleLabel }: Dashb
       `}>
         <div className="flex items-center justify-between p-5 border-b border-sidebar-border">
           <Link to="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-accent flex items-center justify-center">
-              <span className="font-display font-bold text-accent-foreground text-sm">OH</span>
-            </div>
-            <span className="font-display font-bold text-lg text-sidebar-foreground">OneHeal</span>
+            <img src="/logo.png" alt="Elvantia" className="h-8 w-8 rounded-lg object-contain" />
+            <span className="font-display font-bold text-lg text-sidebar-foreground">Elvantia</span>
           </Link>
           <Button variant="ghost" size="icon" className="lg:hidden text-sidebar-foreground" onClick={() => setSidebarOpen(false)}>
             <X className="h-5 w-5" />
