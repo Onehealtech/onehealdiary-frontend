@@ -325,6 +325,7 @@ export default function VendorMyDiaries() {
                       <TableHead>Type</TableHead>
                       <TableHead>Quantity</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Reject Reason</TableHead>
                       <TableHead>Fulfilled Date</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -332,7 +333,7 @@ export default function VendorMyDiaries() {
                   <TableBody>
                     {diaryRequests.map(r => (
                       <TableRow key={r.id} className="hover:bg-muted/30">
-                        <TableCell className="text-sm">{r.requestDate}</TableCell>
+                        <TableCell className="text-sm">{r.requestDate.split('T')[0]}</TableCell>
                         <TableCell className="capitalize text-sm">{r.dairyType}</TableCell>
                         <TableCell className="font-medium">{r.quantity}</TableCell>
                         <TableCell>
@@ -341,6 +342,7 @@ export default function VendorMyDiaries() {
                               "bg-destructive/15 text-destructive border-destructive/30"
                             }`}>{r.status}</Badge>
                         </TableCell>
+                        <TableCell className="text-sm">{r.rejectionReason || "—"}</TableCell>
                         <TableCell className="text-sm">{r.fulfilledDate || "—"}</TableCell>
                         <TableCell>
                           {r.status === "pending" && (

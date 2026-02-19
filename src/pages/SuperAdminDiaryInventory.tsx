@@ -56,9 +56,12 @@ export default function SuperAdminDiaryInventory() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterVendor, setFilterVendor] = useState("all");
   const [searchId, setSearchId] = useState("");
-
+  const [requestDiary, setRequestDiary] = useState<any[]>([])
   // Request modal
   const [requestModal, setRequestModal] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectModal, setRejectModal] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchVendors = async () => {
       try {
@@ -299,45 +302,156 @@ export default function SuperAdminDiaryInventory() {
   };
 
   // Handle request approval
-  const currentRequest = diaryRequests.find(r => r.id === requestModal);
-  const handleApproveRequest = () => {
-    if (!currentRequest) return;
-    const info = diaryTypeMap[currentRequest.diaryType];
-    const startSeq = getNextSeq(info.code);
-    const year = new Date().getFullYear();
-    const newDiaries: GeneratedDiary[] = [];
-    for (let i = 0; i < currentRequest.quantity; i++) {
-      const seq = String(startSeq + i).padStart(3, "0");
-      newDiaries.push({
-        id: `DRY-${year}-${info.code}-${seq}`,
-        diaryType: currentRequest.diaryType,
-        typeCode: info.code,
-        generatedDate: new Date().toISOString(),
-        status: "assigned",
-        assignedVendorId: currentRequest.vendorId,
-      });
+  const currentRequest = requestDiary.find(r => r.id === requestModal);
+  useEffect(() => {
+    const fetchRequestDiary = async () => {
+      try {
+        setLoading(true);
+
+        const token = localStorage.getItem("token");
+
+        const res = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL}/api/v1/sp/diary-requests?status=pending`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await res.json();
+        console.log(data, "data");
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to fetch diaries");
+        }
+
+        // IMPORTANT: adjust based on backend structure
+        setRequestDiary(data.data.data);
+
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
     }
-    setGeneratedDiaries(prev => [...prev, ...newDiaries]);
-    setDiaryRequests(prev => prev.map(r => r.id === currentRequest.id ? { ...r, status: "fulfilled" as const, fulfilledDate: new Date().toISOString().split("T")[0], assignedDiaryIds: newDiaries.map(d => d.id) } : r));
-    setNotifications(prev => [...prev, {
-      id: `N-REQ-${Date.now()}`,
-      userId: currentRequest.vendorId,
-      type: "info" as const,
-      severity: "medium" as const,
-      message: `📦 You received ${currentRequest.quantity} ${info.label} diaries from Admin`,
-      timestamp: new Date().toISOString(),
-      read: false,
-    }]);
-    toast({ title: "Request fulfilled!", description: `Generated and assigned ${currentRequest.quantity} diaries to ${currentRequest.vendorName}` });
-    setRequestModal(null);
+    fetchRequestDiary();
+  }, [])
+  const refreshRequests = async () => {
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/v1/sp/diary-requests?status=pending`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+      setRequestDiary(data.data.data);
+
+    } catch (error) {
+      console.error("Failed to refresh requests");
+    }
   };
 
-  const handleRejectRequest = () => {
-    if (!currentRequest) return;
-    setDiaryRequests(prev => prev.map(r => r.id === currentRequest.id ? { ...r, status: "rejected" as const } : r));
-    setRequestModal(null);
-    toast({ title: "Request rejected", variant: "destructive" });
+  const handleApproveRequest = async () => {
+    if (!requestModal) return;
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/v1/diary-requests/${requestModal}/approve`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to approve request");
+      }
+
+      toast({
+        title: "Request Approved",
+        description: "Diaries generated and assigned successfully",
+      });
+
+      setRequestModal(null);
+      await refreshRequests(); // we’ll create this below
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
+
+  const handleRejectSubmit = async () => {
+    if (!rejectModal || !rejectReason.trim()) {
+      toast({
+        title: "Reject reason required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL}/api/v1/diary-requests/${rejectModal}/reject`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            reason: rejectReason,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Reject failed");
+      }
+
+      toast({
+        title: "Request Rejected",
+        description: "Vendor has been notified",
+        variant: "destructive",
+      });
+
+      setRejectModal(null);
+      setRejectReason("");
+      await refreshRequests();
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
 
   // Inventory table filters
   // const allDiaries = generatedDiaries
@@ -361,15 +475,15 @@ export default function SuperAdminDiaryInventory() {
         <h1 className="text-2xl font-display font-bold">Generate & Manage Diary IDs</h1>
 
         {/* Pending Requests Banner */}
-        {pendingRequests.length > 0 && (
+        {requestDiary.length > 0 && (
           <Card className="border-warning/50 bg-warning/5">
             <CardContent className="pt-4">
-              <p className="font-semibold text-sm mb-2">📋 {pendingRequests.length} Pending Diary Request(s)</p>
+              <p className="font-semibold text-sm mb-2">📋 {requestDiary.length} Pending Diary Request(s)</p>
               <div className="space-y-2">
-                {pendingRequests.map(r => (
+                {requestDiary.map(r => (
                   <div key={r.id} className="flex items-center justify-between bg-card rounded-lg p-3 border">
                     <div>
-                      <p className="text-sm font-medium">{r.vendorName} — {r.quantity} {diaryTypeMap[r.diaryType]?.label} diaries</p>
+                      <p className="text-sm font-medium">{r.vendor.fullName} — {r.quantity} {diaryTypeMap[r.diaryType]?.label} diaries</p>
                       <p className="text-xs text-muted-foreground">{r.requestDate}{r.message ? ` • "${r.message}"` : ""}</p>
                     </div>
                     <Button size="sm" onClick={() => setRequestModal(r.id)} className="gradient-teal text-primary-foreground">Review</Button>
@@ -494,6 +608,35 @@ export default function SuperAdminDiaryInventory() {
             </CardContent>
           </Card>
         )}
+        {/* Reject Reason Modal */}
+        <Dialog open={!!rejectModal} onOpenChange={() => setRejectModal(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reject Diary Request</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <Label>Reason for rejection</Label>
+              <Input
+                placeholder="Enter reason..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+              />
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setRejectModal(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleRejectSubmit}
+              >
+                Reject Request
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* SECTION 3: All Diaries Inventory Table */}
         {generatedDiaries.length > 0 && (
@@ -582,15 +725,18 @@ export default function SuperAdminDiaryInventory() {
             <DialogHeader><DialogTitle>Diary Request Details</DialogTitle></DialogHeader>
             {currentRequest && (
               <div className="space-y-3">
-                <p className="text-sm"><span className="text-muted-foreground">Vendor:</span> <span className="font-medium">{currentRequest.vendorName} ({currentRequest.vendorId})</span></p>
-                <p className="text-sm"><span className="text-muted-foreground">Diary Type:</span> <span className="capitalize font-medium">{currentRequest.diaryType}</span></p>
+                <p className="text-sm"><span className="text-muted-foreground">Vendor:</span> <span className="font-medium">{currentRequest.vendor.fullName} ({currentRequest.vendorId})</span></p>
+                <p className="text-sm"><span className="text-muted-foreground">Diary Type:</span> <span className="capitalize font-medium">{currentRequest.dairyType}</span></p>
                 <p className="text-sm"><span className="text-muted-foreground">Quantity:</span> <span className="font-bold">{currentRequest.quantity}</span></p>
-                <p className="text-sm"><span className="text-muted-foreground">Request Date:</span> {currentRequest.requestDate}</p>
+                <p className="text-sm"><span className="text-muted-foreground">Request Date:</span> {currentRequest.requestDate.split('T')[0]}</p>
                 {currentRequest.message && <p className="text-sm"><span className="text-muted-foreground">Message:</span> "{currentRequest.message}"</p>}
               </div>
             )}
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={handleRejectRequest}><X className="h-4 w-4 mr-1" />Reject</Button>
+              <Button variant="outline" onClick={() => {
+                setRejectModal(requestModal);
+                setRequestModal(null);
+              }}><X className="h-4 w-4 mr-1" />Reject</Button>
               <Button onClick={handleApproveRequest} className="gradient-teal text-primary-foreground"><Check className="h-4 w-4 mr-1" />Generate & Assign</Button>
             </DialogFooter>
           </DialogContent>

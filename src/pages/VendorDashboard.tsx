@@ -83,7 +83,8 @@ export default function VendorDashboard() {
   const [dashboardData, setDashboardData] = useState<any>();
   const [loading, setLoading] = useState(true);
   const [sales, setSales] = useState<any[]>([]);
-
+  const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
+  const [checkingWallet, setCheckingWallet] = useState(true);
   const handleDiaryValidation = async () => {
     if (!serialNumber) return;
 
@@ -180,6 +181,7 @@ export default function VendorDashboard() {
         {
           patientId: createdPatientId,
           amount: 500,
+          doctorId: selectedDoctor,
           customerPhone: patientPhone,
           customerName: patientName,
           generatedDiaryId: validatedDiary.id,
@@ -327,17 +329,34 @@ export default function VendorDashboard() {
     fetchDoctors();
   }, []);
   useEffect(() => {
-    axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/v1/wallets/me`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem("token")}`
+    const fetchWallet = async () => {
+      try {
+        const res = await axios.get(
+          `${import.meta.env.VITE_API_BASE_URL}/api/v1/wallets/me`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        );
+
+        const wallet = res.data.data;
+        setWalletBalance(wallet);
+
+        // 🔒 If no balance → block dashboard
+        if (!wallet || wallet.balance <= 0) {
+          setAdvanceModalOpen(true);
+        }
+
+      } catch (error) {
+        console.error("Wallet fetch error", error);
+      } finally {
+        setCheckingWallet(false);
       }
-    }).then((res) => {
-      console.log(res.data.data)
-      setWalletBalance(res.data.data)
-    }).catch((error) => {
-      console.error("Error fetching diaries", error);
-    })
-  }, [])
+    };
+
+    fetchWallet();
+  }, []);
   useEffect(() => {
     const fetchSales = async () => {
       try {
@@ -420,6 +439,87 @@ export default function VendorDashboard() {
       toast({
         title: "Error",
         description: error.response?.data?.message || "Transfer failed",
+        variant: "destructive",
+      });
+    }
+  };
+  const handleAdvancePayment = async (amount: number) => {
+    try {
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        toast({
+          title: "Unauthorized",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 1️⃣ Create Cashfree Order
+      const orderRes = await axios.post(
+        `${BASE_URL}/api/v1/wallets/create-payout-order`,
+        { amount },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      const { paymentSessionId, orderId } = orderRes.data;
+
+      // 2️⃣ Initialize Cashfree
+      const cashfree = new (window as any).Cashfree({
+        mode: "sandbox", // change to production later
+      });
+
+      cashfree.checkout({
+        paymentSessionId,
+        redirectTarget: "_modal",
+      }).then(async (result: any) => {
+
+        if (result.paymentDetails?.paymentMessage === "Payment finished. Check status.") {
+
+          // 3️⃣ Record Advance After Success
+          await axios.post(
+            `${BASE_URL}/api/v1/wallets/record-advance`,
+            {
+              amount,
+              paymentMethod: "CASHFREE",
+              paymentReference: orderId,
+              notes: "Vendor Advance Payment",
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
+          // 4️⃣ Refresh Wallet
+          const walletRes = await axios.get(
+            `${BASE_URL}/api/v1/wallets/me`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          setWalletBalance(walletRes.data.data);
+          setAdvanceModalOpen(false);
+
+          toast({
+            title: "Advance Added Successfully",
+            description: `₹${amount} credited to wallet`,
+          });
+
+        } else {
+          toast({
+            title: "Payment Failed",
+            variant: "destructive",
+          });
+        }
+
+      });
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Advance failed",
         variant: "destructive",
       });
     }
@@ -595,18 +695,43 @@ export default function VendorDashboard() {
         </Card>
       );
     };
-
+    if (checkingWallet) {
+      return <div className="p-10 text-center">Checking wallet...</div>;
+    }
     return (
-      <DashboardLayout navItems={navItems} roleLabel="Vendor">
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard title="Today's Sales" value={Math.min(dashboardData?.sales?.total, 3)} icon={ShoppingBag} />
-            <StatCard title="Wallet Credit" value={walletBalance?.totalCredited ? `₹${walletBalance?.totalCredited}` : "₹0"} icon={TrendingUp} variant="success" />
-            <StatCard title="Wallet Balance" value={walletBalance?.balance ? `₹${walletBalance?.balance}` : "₹0"} icon={Wallet} />
+      <>
+        <Dialog open={advanceModalOpen} onOpenChange={() => { }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Advance Payment Required</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Your wallet balance is ₹0.
+                Please add advance amount to continue using dashboard and diaries.
+              </p>
+
+              <Button
+                className="w-full gradient-teal text-primary-foreground"
+                onClick={() => { handleAdvancePayment(500); setAdvanceModalOpen(false) }}
+              >
+                Add Advance ₹5000
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        <DashboardLayout navItems={navItems} roleLabel="Vendor">
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <StatCard title="Today's Sales" value={Math.min(dashboardData?.sales?.total, 3)} icon={ShoppingBag} />
+              <StatCard title="Wallet Credit" value={walletBalance?.availableCredit ? `₹${walletBalance?.availableCredit}` : `₹${walletBalance?.totalCredited}`} icon={TrendingUp} variant="success" />
+              <StatCard title="Total Balance" value={walletBalance?.balance ? `₹${walletBalance?.balance}` : "₹0"} icon={Wallet} />
+            </div>
+            <div className="max-w-xl">{renderStep()}</div>
           </div>
-          <div className="max-w-xl">{renderStep()}</div>
-        </div>
-      </DashboardLayout>
+        </DashboardLayout>
+      </>
     );
   }
 
@@ -683,10 +808,10 @@ export default function VendorDashboard() {
     <DashboardLayout navItems={navItems} roleLabel="Vendor">
       <div className="space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard title="Total Credited" value={walletBalance?.totalCredited ? `₹${walletBalance?.totalCredited}` : "₹0"} icon={IndianRupee} />
-          <StatCard title="Total Debited" value={walletBalance?.totalDebited ? `₹${walletBalance?.totalDebited}` : "₹0"} icon={IndianRupee} />
+          <StatCard title="Total Credited" value={walletBalance?.availableCredit ? `₹${walletBalance?.availableCredit}` : `₹${walletBalance?.totalCredited}`} icon={IndianRupee} />
+          <StatCard title="Total Transfereable" value={walletBalance?.totalDebited ? `₹${walletBalance?.totalDebited}` : "₹0"} icon={IndianRupee} />
 
-          <StatCard title="Wallet Balance" value={walletBalance?.balance ? `₹${walletBalance?.balance}` : "₹0"} icon={Wallet} />
+          <StatCard title="Total Balance" value={walletBalance?.balance ? `₹${walletBalance?.balance}` : "₹0"} icon={Wallet} />
         </div>
 
         <Card>
@@ -709,7 +834,7 @@ export default function VendorDashboard() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead>Date</TableHead><TableHead>Diary ID</TableHead><TableHead>Patient</TableHead><TableHead>Patient Details</TableHead><TableHead>Doctor</TableHead><TableHead>Diary Type</TableHead><TableHead>Payment</TableHead><TableHead>Sent to Admin</TableHead><TableHead>Credit</TableHead><TableHead>Actions</TableHead>
+                    <TableHead>Date</TableHead><TableHead>Diary ID</TableHead><TableHead>Patient</TableHead><TableHead>Patient Details</TableHead><TableHead>Doctor</TableHead><TableHead>Payment</TableHead><TableHead>Sent to Admin</TableHead><TableHead>Credit</TableHead><TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -738,9 +863,6 @@ export default function VendorDashboard() {
                         {sale.doctor?.fullName}
                       </TableCell>
 
-                      <TableCell>
-                        ₹{sale.saleAmount}
-                      </TableCell>
 
                       <TableCell>
                         ₹{sale.saleAmount}

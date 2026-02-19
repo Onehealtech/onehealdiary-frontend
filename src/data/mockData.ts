@@ -63,6 +63,7 @@ export interface DiaryRequest {
   dairyType: DiaryType;
   quantity: number;
   message?: string;
+  rejectionReason?: string;
   requestDate: string;
   status: "pending" | "fulfilled" | "rejected";
   fulfilledDate?: string;
