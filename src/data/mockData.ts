@@ -1,5 +1,6 @@
 // ---- USERS ----
 export interface Doctor {
+  createdAt: any;
   id: string; role: "doctor"; name: string; email: string; phone?: string; hospital: string; license: string; licenseRegistration?: string; licensePhoto?: string; specialization: string; status: "active" | "inactive" | "pending";
 }
 export interface Vendor {
@@ -59,7 +60,7 @@ export interface DiaryRequest {
   id: string;
   vendorId: string;
   vendorName: string;
-  diaryType: DiaryType;
+  dairyType: DiaryType;
   quantity: number;
   message?: string;
   requestDate: string;
@@ -75,21 +76,21 @@ export const superAdmins: SuperAdmin[] = [
 ];
 
 export const doctors: Doctor[] = [
-  { id: "D001", role: "doctor", name: "Dr. Priya Sharma", email: "priya.sharma@aiims.com", phone: "+91-9876000001", hospital: "AIIMS Delhi", license: "MCI-DL-12345", licenseRegistration: "REG-DL-001", specialization: "Oncology", status: "active" },
-  { id: "D002", role: "doctor", name: "Dr. Rajesh Kumar", email: "rajesh.k@tata.com", phone: "+91-9876000002", hospital: "Tata Memorial", license: "MCI-MH-23456", licenseRegistration: "REG-MH-002", specialization: "Surgery", status: "active" },
-  { id: "D003", role: "doctor", name: "Dr. Anita Gupta", email: "anita.g@apollo.com", phone: "+91-9876000003", hospital: "Apollo Chennai", license: "MCI-TN-34567", licenseRegistration: "REG-TN-003", specialization: "Radiotherapy", status: "active" },
-  { id: "D004", role: "doctor", name: "Dr. Vikram Singh", email: "vikram.s@fortis.com", phone: "+91-9876000004", hospital: "Fortis Gurgaon", license: "MCI-HR-45678", licenseRegistration: "REG-HR-004", specialization: "Oncology", status: "active" },
-  { id: "D005", role: "doctor", name: "Dr. Meera Patel", email: "meera.p@apollo.com", phone: "+91-9876000005", hospital: "Apollo Mumbai", license: "MCI-MH-56789", licenseRegistration: "REG-MH-005", specialization: "Surgery", status: "active" },
-  { id: "D006", role: "doctor", name: "Dr. Suresh Nair", email: "suresh.n@amrita.com", phone: "+91-9876000006", hospital: "Amrita Kochi", license: "MCI-KL-67890", licenseRegistration: "REG-KL-006", specialization: "Oncology", status: "active" },
-  { id: "D007", role: "doctor", name: "Dr. Kavitha Reddy", email: "kavitha.r@nims.com", phone: "+91-9876000007", hospital: "NIMS Hyderabad", license: "MCI-TS-78901", licenseRegistration: "REG-TS-007", specialization: "Radiotherapy", status: "inactive" },
-  { id: "D008", role: "doctor", name: "Dr. Arun Joshi", email: "arun.j@sms.com", phone: "+91-9876000008", hospital: "SMS Hospital Jaipur", license: "MCI-RJ-89012", licenseRegistration: "REG-RJ-008", specialization: "Oncology", status: "active" },
-  { id: "D009", role: "doctor", name: "Dr. Sneha Kapoor", email: "sneha.k@medanta.com", phone: "+91-9876000009", hospital: "Medanta Gurgaon", license: "MCI-HR-90123", licenseRegistration: "REG-HR-009", specialization: "Surgery", status: "active" },
-  { id: "D010", role: "doctor", name: "Dr. Ramesh Iyer", email: "ramesh.i@cmc.com", phone: "+91-9876000010", hospital: "CMC Vellore", license: "MCI-TN-01234", licenseRegistration: "REG-TN-010", specialization: "Oncology", status: "active" },
-  { id: "D011", role: "doctor", name: "Dr. Pooja Malhotra", email: "pooja.m@max.com", phone: "+91-9876000011", hospital: "Max Delhi", license: "MCI-DL-11234", licenseRegistration: "REG-DL-011", specialization: "Surgery", status: "active" },
-  { id: "D012", role: "doctor", name: "Dr. Ashok Banerjee", email: "ashok.b@cmri.com", phone: "+91-9876000012", hospital: "CMRI Kolkata", license: "MCI-WB-22345", licenseRegistration: "REG-WB-012", specialization: "Radiotherapy", status: "active" },
-  { id: "D013", role: "doctor", name: "Dr. Lakshmi Rao", email: "lakshmi.r@kidwai.com", phone: "+91-9876000013", hospital: "Kidwai Bangalore", license: "MCI-KA-33456", licenseRegistration: "REG-KA-013", specialization: "Oncology", status: "active" },
-  { id: "D014", role: "doctor", name: "Dr. Nikhil Chopra", email: "nikhil.c@pgimer.com", phone: "+91-9876000014", hospital: "PGIMER Chandigarh", license: "MCI-CH-44567", licenseRegistration: "REG-CH-014", specialization: "Surgery", status: "active" },
-  { id: "D015", role: "doctor", name: "Dr. Deepa Menon", email: "deepa.m@rcc.com", phone: "+91-9876000015", hospital: "RCC Trivandrum", license: "MCI-KL-55678", licenseRegistration: "REG-KL-015", specialization: "Oncology", status: "active" },
+  { id: "D001", role: "doctor", name: "Dr. Priya Sharma", email: "priya.sharma@aiims.com", phone: "+91-9876000001", hospital: "AIIMS Delhi", license: "MCI-DL-12345", licenseRegistration: "REG-DL-001", specialization: "Oncology", status: "active", createdAt: "2023-06-01" },
+  { id: "D002", role: "doctor", name: "Dr. Rajesh Kumar", email: "rajesh.k@tata.com", phone: "+91-9876000002", hospital: "Tata Memorial", license: "MCI-MH-23456", licenseRegistration: "REG-MH-002", specialization: "Surgery", status: "active", createdAt: "2023-06-01" },
+  { id: "D003", role: "doctor", name: "Dr. Anita Gupta", email: "anita.g@apollo.com", phone: "+91-9876000003", hospital: "Apollo Chennai", license: "MCI-TN-34567", licenseRegistration: "REG-TN-003", specialization: "Radiotherapy", status: "active", createdAt: "2023-06-01" },
+  { id: "D004", role: "doctor", name: "Dr. Vikram Singh", email: "vikram.s@fortis.com", phone: "+91-9876000004", hospital: "Fortis Gurgaon", license: "MCI-HR-45678", licenseRegistration: "REG-HR-004", specialization: "Oncology", status: "active", createdAt: "2023-06-01" },
+  { id: "D005", role: "doctor", name: "Dr. Meera Patel", email: "meera.p@apollo.com", phone: "+91-9876000005", hospital: "Apollo Mumbai", license: "MCI-MH-56789", licenseRegistration: "REG-MH-005", specialization: "Surgery", status: "active", createdAt: "2023-06-01" },
+  { id: "D006", role: "doctor", name: "Dr. Suresh Nair", email: "suresh.n@amrita.com", phone: "+91-9876000006", hospital: "Amrita Kochi", license: "MCI-KL-67890", licenseRegistration: "REG-KL-006", specialization: "Oncology", status: "active", createdAt: "2023-06-01" },
+  { id: "D007", role: "doctor", name: "Dr. Kavitha Reddy", email: "kavitha.r@nims.com", phone: "+91-9876000007", hospital: "NIMS Hyderabad", license: "MCI-TS-78901", licenseRegistration: "REG-TS-007", specialization: "Radiotherapy", status: "inactive", createdAt: "" },
+  { id: "D008", role: "doctor", name: "Dr. Arun Joshi", email: "arun.j@sms.com", phone: "+91-9876000008", hospital: "SMS Hospital Jaipur", license: "MCI-RJ-89012", licenseRegistration: "REG-RJ-008", specialization: "Oncology", status: "active", createdAt: "2023-06-01" },
+  { id: "D009", role: "doctor", name: "Dr. Sneha Kapoor", email: "sneha.k@medanta.com", phone: "+91-9876000009", hospital: "Medanta Gurgaon", license: "MCI-HR-90123", licenseRegistration: "REG-HR-009", specialization: "Surgery", status: "active", createdAt: "2023-06-01" },
+  { id: "D010", role: "doctor", name: "Dr. Ramesh Iyer", email: "ramesh.i@cmc.com", phone: "+91-9876000010", hospital: "CMC Vellore", license: "MCI-TN-01234", licenseRegistration: "REG-TN-010", specialization: "Oncology", status: "active", createdAt: "2023-06-01" },
+  { id: "D011", role: "doctor", name: "Dr. Pooja Malhotra", email: "pooja.m@max.com", phone: "+91-9876000011", hospital: "Max Delhi", license: "MCI-DL-11234", licenseRegistration: "REG-DL-011", specialization: "Surgery", status: "active", createdAt: "2023-06-01" },
+  { id: "D012", role: "doctor", name: "Dr. Ashok Banerjee", email: "ashok.b@cmri.com", phone: "+91-9876000012", hospital: "CMRI Kolkata", license: "MCI-WB-22345", licenseRegistration: "REG-WB-012", specialization: "Radiotherapy", status: "active", createdAt: "2023-06-01" },
+  { id: "D013", role: "doctor", name: "Dr. Lakshmi Rao", email: "lakshmi.r@kidwai.com", phone: "+91-9876000013", hospital: "Kidwai Bangalore", license: "MCI-KA-33456", licenseRegistration: "REG-KA-013", specialization: "Oncology", status: "active", createdAt: "2023-06-01" },
+  { id: "D014", role: "doctor", name: "Dr. Nikhil Chopra", email: "nikhil.c@pgimer.com", phone: "+91-9876000014", hospital: "PGIMER Chandigarh", license: "MCI-CH-44567", licenseRegistration: "REG-CH-014", specialization: "Surgery", status: "active", createdAt: "2023-06-01" },
+  { id: "D015", role: "doctor", name: "Dr. Deepa Menon", email: "deepa.m@rcc.com", phone: "+91-9876000015", hospital: "RCC Trivandrum", license: "MCI-KL-55678", licenseRegistration: "REG-KL-015", specialization: "Oncology", status: "active", createdAt: "2023-06-01" },
 ];
 
 export const vendors: Vendor[] = [

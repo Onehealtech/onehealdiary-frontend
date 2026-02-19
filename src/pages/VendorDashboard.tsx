@@ -47,6 +47,8 @@ export default function VendorDashboard() {
   const { toast } = useToast();
   const location = useLocation();
   const currentPage = location.pathname;
+  const diaryId = location.search.split('?diaryId=')[1];
+  console.log(diaryId, "dairyId");
 
   // Sale flow state
   const [step, setStep] = useState(1);
@@ -72,7 +74,170 @@ export default function VendorDashboard() {
   const vendorDiaries = diaries.filter(d => d.vendorId === "V001");
   const todaySales = vendorDiaries.filter(d => d.status === "active").length;
   const totalSalesAmount = vendorDiaries.filter(d => d.status === "active").length * 500;
+  const [loadingDiary, setLoadingDiary] = useState(false);
+  const [validatedDiary, setValidatedDiary] = useState<any>(null);
+  const [creatingPatient, setCreatingPatient] = useState(false);
+  const [createdPatientId, setCreatedPatientId] = useState("");
+  const [creatingOrder, setCreatingOrder] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<any>();
+  const [dashboardData, setDashboardData] = useState<any>();
+  const [loading, setLoading] = useState(true);
+  const [sales, setSales] = useState<any[]>([]);
 
+  const handleDiaryValidation = async () => {
+    if (!serialNumber) return;
+
+    try {
+      setLoadingDiary(true);
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      const res = await axios.get(
+        `${BASE_URL}/api/v1/generated-diaries/${serialNumber}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!res.data.success) {
+        toast({
+          title: "Invalid Diary",
+          description: "Diary not found or already used",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const diary = res.data.data;
+      setValidatedDiary(diary);
+
+      // ✅ Auto Select Diary Type
+      setDiaryType(diary.diaryType);
+
+      toast({
+        title: "Diary Verified",
+        description: "Diary is valid",
+      });
+
+      setStep(2);
+
+    } catch (error: any) {
+      toast({
+        title: "Invalid Diary",
+        description: error.response?.data?.message || "Diary not found",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingDiary(false);
+    }
+  };
+  const handleCreatePatient = async () => {
+    try {
+      setCreatingPatient(true);
+
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      const res = await axios.post(
+        `${BASE_URL}/api/v1/patient`,
+        {
+          fullName: patientName,
+          age: patientAge,
+          gender: patientGender,
+          phone: patientPhone,
+          diaryId: validatedDiary.id,
+          doctorId: selectedDoctor,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setCreatedPatientId(res.data.data.id);
+
+      toast({
+        title: "Patient Created",
+        description: "Proceed to payment",
+      });
+
+      setStep(4);
+
+    } catch (error: any) {
+      toast({
+        title: "Failed",
+        description: error.response?.data?.message || "Error creating patient",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingPatient(false);
+    }
+  };
+  const handleCreateOrder = async () => {
+    try {
+      setCreatingOrder(true);
+
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      await axios.post(
+        `${BASE_URL}/api/v1/order/create`,
+        {
+          patientId: createdPatientId,
+          amount: 500,
+          customerPhone: patientPhone,
+          customerName: patientName,
+          generatedDiaryId: validatedDiary.id,
+          customerEmail: "test@test.com",
+          orderNote: `Diary Sale ${serialNumber}`,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      toast({
+        title: "Order Created Successfully",
+        description: "Payment recorded",
+      });
+
+      setStep(5);
+
+    } catch (error: any) {
+      toast({
+        title: "Payment Failed",
+        description: error.response?.data?.message || "Order creation failed",
+        variant: "destructive",
+      });
+    } finally {
+      setCreatingOrder(false);
+    }
+  };
+  useEffect(() => {
+    if (diaryId) {
+      setSN(diaryId);
+      if (serialNumber) {
+        handleDiaryValidation();
+      }
+    }
+  }, [diaryId, serialNumber]);
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
+
+        const response = await axios.get(
+          `${BASE_URL}/api/v1/dashboard/vendor`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setDashboardData(response.data.data);
+      } catch (error: any) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboard();
+  }, []);
   const resetFlow = () => {
     setStep(1); setSN(""); setDiaryType(""); setPatientName(""); setPatientAge(""); setPatientGender("");
     setPatientPhone(""); setPatientAddress(""); setSelectedDoctor(""); setPaymentConfirmed(false); setSaleComplete(false);
@@ -148,10 +313,10 @@ export default function VendorDashboard() {
             hospital: doc.hospital,
             license: doc.license,
             specialization: doc.specialization,
-            status: "active",
+            status: doc.isActive ? "active" : "pending",
             totalPatients: doc.stats?.totalPatients || 0,
             totalAssistants: doc.stats?.totalAssistants || 0,
-            createdDate: new Date(doc.createdAt).toLocaleDateString(),
+            createdAt: doc.createdAt.split("T")[0],
           }))
         );
       } catch (error) {
@@ -161,6 +326,105 @@ export default function VendorDashboard() {
 
     fetchDoctors();
   }, []);
+  useEffect(() => {
+    axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/v1/wallets/me`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`
+      }
+    }).then((res) => {
+      console.log(res.data.data)
+      setWalletBalance(res.data.data)
+    }).catch((error) => {
+      console.error("Error fetching diaries", error);
+    })
+  }, [])
+  useEffect(() => {
+    const fetchSales = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
+        const user = localStorage.getItem('user')
+        const userId = JSON.parse(user).id
+
+        const response = await axios.get(
+          `${BASE_URL}/api/v1/vendors/${userId}/sales`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        setSales(response.data.data.sales);
+      } catch (error) {
+        console.error("Error fetching sales", error);
+      }
+    };
+
+    fetchSales();
+  }, []);
+  console.log(sales, "sales");
+  const handleTransfer = async (sale: any) => {
+    try {
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      // 1️⃣ Create Cashfree Order
+      const orderRes = await axios.post(
+        `${BASE_URL}/api/v1/wallets/create-payout-order`,
+        { amount: sale.saleAmount },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const { paymentSessionId } = orderRes.data;
+
+      // 2️⃣ Initialize Cashfree
+      const cashfree = new (window as any).Cashfree({
+        mode: "sandbox", // change to sandbox for testing
+      });
+
+      cashfree.checkout({
+        paymentSessionId,
+        redirectTarget: "_modal",
+      }).then(async (result: any) => {
+        console.log(result, "result");
+
+        if (result.paymentDetails?.paymentMessage === "Payment finished. Check status.") {
+          console.log("payment Sucess");
+
+          // 3️⃣ Call payout route after success
+          const user = JSON.parse(localStorage.getItem("user") || "{}");
+          console.log(user, "user");
+
+          await axios.post(
+            `${BASE_URL}/api/v1/wallets/${user.id}/payout`,
+            { amount: sale.saleAmount },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          toast({
+            title: "Payment Sent to Super Admin",
+            description: "Transfer completed successfully",
+          });
+
+        } else {
+          toast({
+            title: "Payment Failed",
+            variant: "destructive",
+          });
+        }
+
+      });
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Transfer failed",
+        variant: "destructive",
+      });
+    }
+  };
+
   // ========== NEW SALE ==========
   if (currentPage === "/vendor" || currentPage === "/vendor/") {
     const renderStep = () => {
@@ -223,7 +487,13 @@ export default function VendorDashboard() {
                     <Input placeholder="DRY-2024-XXXX" value={serialNumber} onChange={e => setSN(e.target.value)} className="text-lg" />
                   </TabsContent>
                 </Tabs>
-                <Button onClick={() => setStep(2)} disabled={!serialNumber} className="w-full gradient-teal text-primary-foreground">Next <ArrowRight className="h-4 w-4 ml-1" /></Button>
+                <Button
+                  onClick={handleDiaryValidation}
+                  disabled={!serialNumber || loadingDiary}
+                  className="w-full gradient-teal text-primary-foreground"
+                >
+                  {loadingDiary ? "Checking..." : "Next"}
+                </Button>
               </>
             )}
 
@@ -280,7 +550,13 @@ export default function VendorDashboard() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={() => setStep(4)} disabled={!patientName || !patientAge || !patientGender || !patientPhone || !patientAddress || !selectedDoctor} className="w-full gradient-teal text-primary-foreground">Next <ArrowRight className="h-4 w-4 ml-1" /></Button>
+                <Button
+                  onClick={handleCreatePatient}
+                  disabled={!patientName || !patientAge || !patientGender || !patientPhone || !selectedDoctor}
+                  className="w-full gradient-teal text-primary-foreground"
+                >
+                  {creatingPatient ? "Creating..." : "Next"}
+                </Button>
               </>
             )}
 
@@ -289,7 +565,13 @@ export default function VendorDashboard() {
                 <div className="text-center py-4"><p className="text-muted-foreground">Diary Price</p><p className="text-4xl font-display font-bold">₹500</p></div>
                 <div><Label>Amount Collected *</Label><Input type="number" placeholder="500" onChange={e => setPaymentConfirmed(e.target.value === "500")} /></div>
                 {!paymentConfirmed && <p className="text-xs text-muted-foreground">Enter exactly ₹500 to proceed</p>}
-                <Button onClick={() => setStep(5)} disabled={!paymentConfirmed} className="w-full gradient-teal text-primary-foreground">Confirm Payment <ArrowRight className="h-4 w-4 ml-1" /></Button>
+                <Button
+                  onClick={handleCreateOrder}
+                  disabled={!paymentConfirmed}
+                  className="w-full gradient-teal text-primary-foreground"
+                >
+                  {creatingOrder ? "Processing..." : "Confirm Payment"}
+                </Button>
               </>
             )}
 
@@ -318,9 +600,9 @@ export default function VendorDashboard() {
       <DashboardLayout navItems={navItems} roleLabel="Vendor">
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard title="Today's Sales" value={Math.min(todaySales, 3)} icon={ShoppingBag} />
-            <StatCard title="This Month" value={todaySales} icon={TrendingUp} variant="success" />
-            <StatCard title="Wallet Balance" value="₹2,500" icon={Wallet} />
+            <StatCard title="Today's Sales" value={Math.min(dashboardData?.sales?.total, 3)} icon={ShoppingBag} />
+            <StatCard title="Wallet Credit" value={walletBalance?.totalCredited ? `₹${walletBalance?.totalCredited}` : "₹0"} icon={TrendingUp} variant="success" />
+            <StatCard title="Wallet Balance" value={walletBalance?.balance ? `₹${walletBalance?.balance}` : "₹0"} icon={Wallet} />
           </div>
           <div className="max-w-xl">{renderStep()}</div>
         </div>
@@ -370,15 +652,15 @@ export default function VendorDashboard() {
                 <Table>
                   <TableHeader><TableRow className="bg-muted/50"><TableHead>Name</TableHead><TableHead>Hospital</TableHead><TableHead>Phone</TableHead><TableHead>Status</TableHead><TableHead>Date Added</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {onboardedDoctors.length === 0 ? (
+                    {doctors.length === 0 ? (
                       <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No doctors onboarded yet. Click "Add New Doctor" to get started.</TableCell></TableRow>
-                    ) : onboardedDoctors.map((d, i) => (
+                    ) : doctors.map((d, i) => (
                       <TableRow key={i}>
                         <TableCell className="font-medium">{d.name}</TableCell>
                         <TableCell>{d.hospital}</TableCell>
                         <TableCell>{d.phone}</TableCell>
-                        <TableCell><StatusBadge status={d.status === "Pending" ? "pending" : "active"} /></TableCell>
-                        <TableCell>{d.date}</TableCell>
+                        <TableCell><StatusBadge status={d.status} /></TableCell>
+                        <TableCell>{d.createdAt}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -392,23 +674,19 @@ export default function VendorDashboard() {
   }
 
   // ========== MY SALES ==========
-  const filteredSales = salesDiaryTypeFilter === "all"
-    ? vendorDiaries
-    : vendorDiaries.filter(d => d.diaryType === salesDiaryTypeFilter);
+  const filteredSales =
+    salesDiaryTypeFilter === "all"
+      ? sales
+      : sales.filter((s) => s.diaryType === salesDiaryTypeFilter);
 
   return (
     <DashboardLayout navItems={navItems} roleLabel="Vendor">
       <div className="space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <StatCard title="Total Sales" value={`₹${totalSalesAmount.toLocaleString()}`} icon={IndianRupee} />
-          <Card className="cursor-pointer hover:shadow-clinical-md transition-shadow" onClick={() => setStatementOpen(true)}>
-            <CardContent className="pt-6 text-center">
-              <Receipt className="h-6 w-6 text-secondary mx-auto mb-2" />
-              <p className="text-sm font-medium">Statement</p>
-              <p className="text-xs text-muted-foreground">View transaction history</p>
-            </CardContent>
-          </Card>
-          <StatCard title="Wallet Balance" value="₹2,500" icon={Wallet} />
+          <StatCard title="Total Credited" value={walletBalance?.totalCredited ? `₹${walletBalance?.totalCredited}` : "₹0"} icon={IndianRupee} />
+          <StatCard title="Total Debited" value={walletBalance?.totalDebited ? `₹${walletBalance?.totalDebited}` : "₹0"} icon={IndianRupee} />
+
+          <StatCard title="Wallet Balance" value={walletBalance?.balance ? `₹${walletBalance?.balance}` : "₹0"} icon={Wallet} />
         </div>
 
         <Card>
@@ -431,36 +709,73 @@ export default function VendorDashboard() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
-                    <TableHead>Date</TableHead><TableHead>Diary ID</TableHead><TableHead>Patient</TableHead><TableHead>Patient Details</TableHead><TableHead>Doctor</TableHead><TableHead>Diary Type</TableHead><TableHead>Payment</TableHead><TableHead>Sent to Admin</TableHead><TableHead>Commission</TableHead><TableHead>Actions</TableHead>
+                    <TableHead>Date</TableHead><TableHead>Diary ID</TableHead><TableHead>Patient</TableHead><TableHead>Patient Details</TableHead><TableHead>Doctor</TableHead><TableHead>Diary Type</TableHead><TableHead>Payment</TableHead><TableHead>Sent to Admin</TableHead><TableHead>Credit</TableHead><TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredSales.map(d => {
-                    const p = patients.find(pt => pt.id === d.patientId);
-                    const doc = doctors.find(dc => dc.id === d.doctorId);
-                    return (
-                      <TableRow key={d.id} className="hover:bg-muted/30">
-                        <TableCell className="text-xs">{d.activationDate}</TableCell>
-                        <TableCell className="font-mono text-xs">{d.id}</TableCell>
-                        <TableCell className="font-medium">{p?.name || "—"}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{p ? `${p.age}y, ${p.gender}, ${p.phone}` : "—"}</TableCell>
-                        <TableCell>{doc?.name || "—"}</TableCell>
-                        <TableCell><span className="capitalize text-xs px-2 py-0.5 bg-secondary/10 text-secondary rounded-full">{d.diaryType || "—"}</span></TableCell>
-                        <TableCell>₹{d.salePrice}</TableCell>
-                        <TableCell>₹{d.salePrice}</TableCell>
-                        <TableCell>
-                          {d.status === "active" ? (
-                            <span className="text-xs px-2 py-0.5 bg-success/10 text-success rounded-full font-medium">Received</span>
-                          ) : d.status === "pending" ? (
-                            <span className="text-xs px-2 py-0.5 bg-warning/10 text-warning rounded-full font-medium">Pending</span>
-                          ) : (
-                            <span className="text-xs px-2 py-0.5 bg-destructive/10 text-destructive rounded-full font-medium">Rejected</span>
-                          )}
-                        </TableCell>
-                        <TableCell><Button size="sm" variant="ghost" className="h-7"><Eye className="h-3 w-3" /></Button></TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {sales.map((sale) => (
+                    <TableRow key={sale.id} className="hover:bg-muted/30">
+
+                      <TableCell className="text-xs">
+                        {new Date(sale.activationDate).toLocaleDateString()}
+                      </TableCell>
+
+                      <TableCell className="font-mono text-xs">
+                        {sale.id}
+                      </TableCell>
+
+                      <TableCell className="font-medium">
+                        {sale.patient?.fullName || "—"}
+                      </TableCell>
+
+                      <TableCell className="text-xs text-muted-foreground">
+                        {sale.patient
+                          ? `${sale.patient.age}y, ${sale.patient.gender}, ${sale.patient.phone}`
+                          : "—"}
+                      </TableCell>
+
+                      <TableCell>
+                        {sale.doctor?.fullName}
+                      </TableCell>
+
+                      <TableCell>
+                        ₹{sale.saleAmount}
+                      </TableCell>
+
+                      <TableCell>
+                        ₹{sale.saleAmount}
+                      </TableCell>
+
+                      <TableCell>
+                        {sale.status === "active" ? (
+                          <span className="text-xs px-2 py-0.5 bg-success/10 text-success rounded-full font-medium">
+                            Approved
+                          </span>
+                        ) : sale.status === "pending" ? (
+                          <span className="text-xs px-2 py-0.5 bg-warning/10 text-warning rounded-full font-medium">
+                            Pending
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 bg-destructive/10 text-destructive rounded-full font-medium">
+                            Rejected
+                          </span>
+                        )}
+                      </TableCell>
+
+                      <TableCell>
+                        ₹{sale.saleAmount}
+                        {sale.commissionPaid && (
+                          <span className="ml-1 text-xs text-success">(Paid)</span>
+                        )}
+                      </TableCell>
+
+                      <TableCell>
+                        <Button size="sm" variant="outline" className="h-7" onClick={() => handleTransfer(sale)}>
+                          Transfer fund
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>

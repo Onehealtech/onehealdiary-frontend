@@ -45,7 +45,15 @@ export default function SuperAdminDashboard() {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-
+  const [activationDiaryData, setActivationDiaryData] = useState<any>([]);
+  const [vendorWalletData, setVendorWalletData] = useState<any>([]);
+  const [selectedWallet, setSelectedWallet] = useState<any>(null);
+  const [walletDialogOpen, setWalletDialogOpen] = useState(false);
+  const [adjustDialogOpen, setAdjustDialogOpen] = useState(false);
+  const [adjustType, setAdjustType] = useState("CREDIT");
+  const [adjustAmount, setAdjustAmount] = useState("");
+  const [adjustDescription, setAdjustDescription] = useState("");
+  const [adjustLoading, setAdjustLoading] = useState(false);
   const currentPage = location.pathname;
   const handleAddDoctor = async (data: any) => {
     setSubmitting(true);
@@ -323,14 +331,205 @@ export default function SuperAdminDashboard() {
   };
 
 
-  const handleApproveDiary = (id: string) => {
-    setDiaries(prev => prev.map(d => d.id === id ? { ...d, status: "active" as const } : d));
-    toast({ title: "Diary approved!", description: `${id} is now active.` });
+  const handleApproveDiary = async (id: string) => {
+    try {
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      await axios.put(
+        `${BASE_URL}/api/v1/diaries/${id}/approve`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      // Update UI after success
+      setDiaries(prev =>
+        prev.map(d =>
+          d.id === id
+            ? { ...d, status: "active", activationDate: new Date().toISOString() }
+            : d
+        )
+      );
+
+      toast({
+        title: "Diary Approved",
+        description: `${id} is now active`,
+      });
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to approve diary",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleRejectDiary = (id: string) => {
-    setDiaries(prev => prev.map(d => d.id === id ? { ...d, status: "rejected" as const } : d));
-    toast({ title: "Diary rejected", variant: "destructive" });
+  const handleRejectDiary = async (id: string) => {
+    const reason = prompt("Enter rejection reason");
+
+    if (!reason) {
+      toast({
+        title: "Rejection reason required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      await axios.put(
+        `${BASE_URL}/api/v1/diaries/${id}/reject`,
+        { reason },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      setDiaries(prev =>
+        prev.map(d =>
+          d.id === id
+            ? { ...d, status: "rejected", rejectionReason: reason }
+            : d
+        )
+      );
+
+      toast({
+        title: "Diary Rejected",
+        description: `${id} rejected successfully`,
+        variant: "destructive",
+      });
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.message || "Failed to reject diary",
+        variant: "destructive",
+      });
+    }
+  };
+
+
+  useEffect(() => {
+    const fetchSoldDiaries = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
+
+        const res = await axios.get(
+          `${BASE_URL}/api/v1/diaries/sold`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        // Save diaries to context
+        setActivationDiaryData(res.data.data.data);
+      } catch (error) {
+        console.error("Error fetching sold diaries", error);
+      }
+    };
+
+    fetchSoldDiaries();
+  }, []);
+  useEffect(() => {
+    const fetchVendorWallet = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
+
+        const res = await axios.get(
+          `${BASE_URL}/api/v1/wallets/all`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setVendorWalletData(res.data.data);
+
+        // Save diaries to context
+      } catch (error) {
+        console.error("Error fetching sold diaries", error);
+      }
+    };
+
+    fetchVendorWallet();
+  }, []);
+  const handleManualAdjust = async () => {
+    if (adjustType === "DEBIT" && Number(adjustAmount) > selectedWallet.balance) {
+      toast({
+        title: "Insufficient Balance",
+        description: "Cannot debit more than wallet balance",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!adjustAmount || Number(adjustAmount) <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Enter valid amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setAdjustLoading(true);
+
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      await axios.post(
+        `${BASE_URL}/api/v1/wallets/${selectedWallet.vendor.id}/adjust`,
+        {
+          type: adjustType,
+          amount: Number(adjustAmount),
+          description: adjustDescription,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      toast({
+        title: "Wallet Adjusted Successfully",
+        description: `${adjustType} ₹${adjustAmount} applied`,
+      });
+
+      setAdjustDialogOpen(false);
+      setAdjustAmount("");
+      setAdjustDescription("");
+
+      // Refresh wallet list
+      const res = await axios.get(
+        `${BASE_URL}/api/v1/wallets/all`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      setVendorWalletData(res.data.data);
+
+    } catch (error: any) {
+      toast({
+        title: "Adjustment Failed",
+        description: error.response?.data?.message || "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setAdjustLoading(false);
+    }
   };
 
   const filteredDoctors = doctors.filter(d => d.name.toLowerCase().includes(search.toLowerCase()) || d.hospital.toLowerCase().includes(search.toLowerCase()));
@@ -509,17 +708,15 @@ export default function SuperAdminDashboard() {
                     <TableRow className="bg-muted/50"><TableHead>Diary ID</TableHead><TableHead>Patient</TableHead><TableHead>Vendor</TableHead><TableHead>Doctor</TableHead><TableHead>Date</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredDiaries.map(d => {
-                      const patient = patients.find(p => p.id === d.patientId);
-                      const vendor = vendors.find(v => v.id === d.vendorId);
-                      const doctor = doctors.find(doc => doc.id === d.doctorId);
+                    {activationDiaryData.map(d => {
+
                       return (
                         <TableRow key={d.id} className="hover:bg-muted/30">
                           <TableCell className="font-mono text-xs">{d.id}</TableCell>
-                          <TableCell>{patient?.name || "—"}</TableCell>
-                          <TableCell>{vendor?.name || "—"}</TableCell>
-                          <TableCell>{doctor?.name || "—"}</TableCell>
-                          <TableCell>{d.activationDate}</TableCell>
+                          <TableCell>{d?.patient?.fullName || "—"}</TableCell>
+                          <TableCell>{d?.vendor?.fullName || "—"}</TableCell>
+                          <TableCell>{d?.doctor?.fullName || "—"}</TableCell>
+                          <TableCell>{d?.createdAt.split("T")[0]}</TableCell>
                           <TableCell><StatusBadge status={d.status} /></TableCell>
                           <TableCell>
                             {d.status === "pending" && (
@@ -548,47 +745,9 @@ export default function SuperAdminDashboard() {
       <DashboardLayout navItems={navItems} roleLabel="Super Admin">
         <div className="space-y-6">
           {/* 6 Stats Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-            <StatCard title="Total Diaries" value={diaries.length} icon={BookOpen} />
-            <StatCard title="Total Vendors" value={vendors.length} icon={Store} />
-            <StatCard title="Active Diaries" value={dashboardData.diaries.activeDiaries} icon={BookOpen} variant="success" />
-            <StatCard title="Pending Approval" value={dashboardData.diaries.pendingApprovals} icon={Clock} variant="warning" />
-            <StatCard title="Completed" value={dashboardData.diaries.completedDiaries} icon={BookOpen} />
-            <StatCard title="In Approval" value={dashboardData.diaries.pendingApprovals} icon={Clock} variant="warning" />
-          </div>
 
           {/* 3 Financial Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <div className="h-12 w-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-3">
-                  <IndianRupee className="h-6 w-6 text-success" />
-                </div>
-                <p className="text-3xl font-display font-bold">₹{(dashboardData.financials.totalRevenue).toLocaleString("en-IN")}</p>
-                <p className="text-sm text-muted-foreground mt-1">Total Amount Received</p>
-                <p className="text-xs text-muted-foreground">Total revenue from diary sales</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <div className="h-12 w-12 rounded-full bg-warning/10 flex items-center justify-center mx-auto mb-3">
-                  <Percent className="h-6 w-6 text-warning" />
-                </div>
-                {/* <p className="text-3xl font-display font-bold">₹{totalCommission.toLocaleString("en-IN")}</p> */}
-                <p className="text-sm text-muted-foreground mt-1">Commission to Vendor</p>
-                <p className="text-xs text-muted-foreground">Total vendor commissions (10%)</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <div className="h-12 w-12 rounded-full bg-secondary/10 flex items-center justify-center mx-auto mb-3">
-                  <Receipt className="h-6 w-6 text-secondary" />
-                </div>
-                <p className="text-lg font-display font-bold mt-2">Statements</p>
-                <Button variant="outline" className="mt-3" onClick={() => setStatementOpen(true)}>View Complete Statement</Button>
-              </CardContent>
-            </Card>
-          </div>
+
 
           {/* Vendor Wallets */}
           <Card>
@@ -596,61 +755,200 @@ export default function SuperAdminDashboard() {
             <CardContent>
               <div className="rounded-lg border overflow-auto">
                 <Table>
-                  <TableHeader><TableRow className="bg-muted/50"><TableHead>Vendor</TableHead><TableHead>Balance</TableHead><TableHead>Diaries Sold</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="bg-muted/50"><TableHead>Vendor</TableHead><TableHead>Balance</TableHead><TableHead>Total Credited</TableHead><TableHead>Total Debited</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {vendors.filter(v => v.walletBalance > 0).map(v => (
+                    {vendorWalletData.map(v => (
                       <TableRow key={v.id} className="hover:bg-muted/30">
-                        <TableCell className="font-medium">{v.name}</TableCell>
-                        <TableCell className="font-semibold">₹{v.walletBalance.toLocaleString()}</TableCell>
-                        <TableCell>{v.diariesSold}</TableCell>
+                        <TableCell className="font-medium">
+                          {v?.vendor?.fullName}
+                        </TableCell>
+
+                        <TableCell className="font-semibold">
+                          ₹{Number(v.balance).toLocaleString("en-IN")}
+                        </TableCell>
+
                         <TableCell>
-                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => toast({ title: "Payout processed", description: `₹${v.walletBalance} transferred to ${v.name}` })}>
-                            Transfer Funds
+                          ₹{Number(v.totalCredited).toLocaleString("en-IN")}
+                        </TableCell>
+                        <TableCell>
+                          ₹{Number(v.totalDebited).toLocaleString("en-IN")}
+                        </TableCell>
+
+                        <TableCell className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => {
+                              setSelectedWallet(v);
+                              setWalletDialogOpen(true);
+                            }}
+                          >
+                            View Transactions
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => {
+                              setSelectedWallet(v);
+                              setAdjustDialogOpen(true);
+                            }}
+                          >
+                            Manual Adjust
+                          </Button>
+
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
+
                 </Table>
               </div>
             </CardContent>
           </Card>
+          <Dialog open={walletDialogOpen} onOpenChange={setWalletDialogOpen}>
+            <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {selectedWallet?.vendor?.fullName} - Wallet Details
+                </DialogTitle>
+              </DialogHeader>
 
-          {/* Statement Modal */}
-          <Dialog open={statementOpen} onOpenChange={setStatementOpen}>
-            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>Complete Financial Statement</DialogTitle></DialogHeader>
-              <div className="grid grid-cols-3 gap-4 mb-4">
-                <div className="text-center p-3 bg-success/10 rounded-lg"><p className="text-sm text-muted-foreground">Total In</p><p className="text-xl font-bold text-success">₹{dashboardData.financials.totalRevenue.toLocaleString("en-IN")}</p></div>
-                <div className="text-center p-3 bg-warning/10 rounded-lg"><p className="text-sm text-muted-foreground">Total Out</p><p className="text-xl font-bold text-warning">₹{dashboardData.financials.totalCommission.toLocaleString("en-IN")}</p></div>
-                <div className="text-center p-3 bg-secondary/10 rounded-lg"><p className="text-sm text-muted-foreground">Net Balance</p><p className="text-xl font-bold text-secondary">₹{(dashboardData.financials.totalRevenue - dashboardData.financials.totalCommission).toLocaleString("en-IN")}</p></div>
-              </div>
-              <div className="flex gap-2 mb-4">
-                <Button size="sm" variant="outline"><Download className="h-4 w-4 mr-1" />PDF</Button>
-                <Button size="sm" variant="outline"><Download className="h-4 w-4 mr-1" />Excel</Button>
-              </div>
-              <div className="rounded-lg border overflow-auto">
-                <Table>
-                  <TableHeader><TableRow className="bg-muted/50"><TableHead>Date</TableHead><TableHead>Type</TableHead><TableHead>Diary ID</TableHead><TableHead>Amount</TableHead><TableHead>Vendor</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                  <TableBody>
-                    {diaries.filter(d => d.status === "active").slice(0, 10).map(d => {
-                      const vendor = vendors.find(v => v.id === d.vendorId);
-                      return (
-                        <TableRow key={d.id}>
-                          <TableCell className="text-sm">{d.activationDate}</TableCell>
-                          <TableCell>Sale</TableCell>
-                          <TableCell className="font-mono text-xs">{d.id}</TableCell>
-                          <TableCell>₹{d.salePrice}</TableCell>
-                          <TableCell>{vendor?.name || "—"}</TableCell>
-                          <TableCell><StatusBadge status="active" /></TableCell>
+              {selectedWallet && (
+                <>
+                  {/* Wallet Summary */}
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div className="p-4 bg-success/10 rounded-lg text-center">
+                      <p className="text-sm text-muted-foreground">Balance</p>
+                      <p className="text-xl font-bold text-success">
+                        ₹{Number(selectedWallet.balance).toLocaleString("en-IN")}
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-primary/10 rounded-lg text-center">
+                      <p className="text-sm text-muted-foreground">Total Credited</p>
+                      <p className="text-xl font-bold text-primary">
+                        ₹{Number(selectedWallet.totalCredited).toLocaleString("en-IN")}
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-destructive/10 rounded-lg text-center">
+                      <p className="text-sm text-muted-foreground">Total Debited</p>
+                      <p className="text-xl font-bold text-destructive">
+                        ₹{Number(selectedWallet.totalDebited).toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Transactions Table */}
+                  <div className="rounded-lg border overflow-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead>Date</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Dairy ID</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Amount</TableHead>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
+                      </TableHeader>
+
+                      <TableBody>
+                        {selectedWallet.transactions.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center text-muted-foreground">
+                              No transactions found
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          selectedWallet.transactions.map((txn: any) => (
+                            <TableRow key={txn.id}>
+                              <TableCell className="text-sm">
+                                {new Date(txn.createdAt).toLocaleString()}
+                              </TableCell>
+
+                              <TableCell>
+                                <StatusBadge status={txn.type === "CREDIT" ? "CREDITED" : "DEBITED"} />
+                              </TableCell>
+
+                              <TableCell className="text-sm">
+                                {txn.diaryId}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {txn.category}
+                              </TableCell>
+
+                              <TableCell className="font-semibold">
+                                ₹{Number(txn.amount).toLocaleString("en-IN")}
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              )}
             </DialogContent>
           </Dialog>
+          <Dialog open={adjustDialogOpen} onOpenChange={setAdjustDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>
+                  Manual Wallet Adjustment
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+
+                <div>
+                  <Label>Type</Label>
+                  <Select value={adjustType} onValueChange={setAdjustType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CREDIT">Credit (Add Money)</SelectItem>
+                      <SelectItem value="DEBIT">Debit (Deduct Money)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label>Amount</Label>
+                  <Input
+                    type="number"
+                    placeholder="Enter amount"
+                    value={adjustAmount}
+                    onChange={(e) => setAdjustAmount(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <Label>Description</Label>
+                  <Input
+                    placeholder="Reason for adjustment"
+                    value={adjustDescription}
+                    onChange={(e) => setAdjustDescription(e.target.value)}
+                  />
+                </div>
+
+              </div>
+
+              <DialogFooter>
+                <Button
+                  onClick={handleManualAdjust}
+                  disabled={adjustLoading}
+                  className="gradient-teal text-primary-foreground"
+                >
+                  {adjustLoading ? "Processing..." : "Confirm Adjustment"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+
         </div>
       </DashboardLayout>
     );

@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import type { DiaryType } from "@/data/mockData";
+import axios from "axios";
 
 const navItems = [
   { label: "New Sale", path: "/vendor", icon: ShoppingBag },
@@ -40,12 +41,9 @@ export default function VendorMyDiaries() {
 
   const vendorId = "V001"; // Mock current vendor
   const myDiaries = generatedDiaries.filter(d => d.assignedVendorId === vendorId);
-  const myRequests = diaryRequests.filter(r => r.vendorId === vendorId);
 
-  const totalAssigned = myDiaries.length;
-  const used = myDiaries.filter(d => d.status === "active").length;
-  const available = myDiaries.filter(d => d.status === "assigned").length;
-  const requested = myRequests.filter(r => r.status === "pending").length;
+
+  console.log(diaryRequests, "diaryRequests");
 
   // Filters
   const [filterType, setFilterType] = useState("all");
@@ -56,7 +54,7 @@ export default function VendorMyDiaries() {
   const [reqType, setReqType] = useState<DiaryType | "">("");
   const [reqQty, setReqQty] = useState("");
   const [reqMsg, setReqMsg] = useState("");
-
+  const [dashboardData, setDashboardData] = useState<any>();
   const fetchGeneratedDiaries = async () => {
     try {
       setLoading(true);
@@ -95,34 +93,101 @@ export default function VendorMyDiaries() {
   useEffect(() => {
     fetchGeneratedDiaries();
   }, []);
-  const handleRequestSubmit = () => {
-    if (!reqType || !reqQty || Number(reqQty) < 1) return;
-    const newReq = {
-      id: `REQ-${Date.now()}`,
-      vendorId,
-      vendorName: "Rajesh Medical Store",
-      diaryType: reqType,
-      quantity: Number(reqQty),
-      message: reqMsg || undefined,
-      requestDate: new Date().toISOString().split("T")[0],
-      status: "pending" as const,
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+        const token = localStorage.getItem("token");
+
+        const response = await axios.get(
+          `${BASE_URL}/api/v1/dashboard/vendor`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        setDashboardData(response.data.data);
+      } catch (error: any) {
+        console.error(error);
+      } finally {
+        setLoading(false);
+      }
     };
-    setDiaryRequests(prev => [...prev, newReq]);
-    // Notify admin
-    setNotifications(prev => [...prev, {
-      id: `N-REQ-${Date.now()}`,
-      userId: "SA001",
-      type: "info" as const,
-      severity: "medium" as const,
-      message: `📦 New diary request from Rajesh Medical Store - ${reqQty} ${diaryTypeMap[reqType]?.label} diaries`,
-      timestamp: new Date().toISOString(),
-      read: false,
-    }]);
-    toast({ title: "Request sent to Super Admin" });
-    setReqType("");
-    setReqQty("");
-    setReqMsg("");
+
+    fetchDashboard();
+  }, []);
+  const fetchDiaryRequests = async () => {
+    try {
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      const response = await axios.get(
+        `${BASE_URL}/api/v1/diary-requests`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      setDiaryRequests(response.data.data.data);
+
+    } catch (error) {
+      console.error(error);
+    }
   };
+  useEffect(() => {
+    fetchDiaryRequests();
+  }, []);
+  const handleRequestSubmit = async () => {
+    if (!reqType || !reqQty || Number(reqQty) < 1) return;
+
+    try {
+      setLoading(true);
+
+      const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+      const token = localStorage.getItem("token");
+
+      const response = await axios.post(
+        `${BASE_URL}/api/v1/diary-requests`,
+        {
+          quantity: Number(reqQty),
+          message: reqMsg,
+          dairyType: reqType,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      toast({
+        title: "Request Sent",
+        description: "Diary request submitted successfully",
+      });
+
+      // Optional: refresh request list
+      fetchDiaryRequests();
+
+      setReqType("");
+      setReqQty("");
+      setReqMsg("");
+
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description:
+          error.response?.data?.message || "Failed to submit request",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const hasPendingRequest = diaryRequests.some(
+    (req) => req.status?.toLowerCase() === "pending"
+  );
 
   const statusColors: Record<string, string> = {
     assigned: "bg-success/15 text-success border-success/30",
@@ -137,10 +202,10 @@ export default function VendorMyDiaries() {
 
         {/* SECTION 1: Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <StatCard title="Total Assigned" value={totalAssigned} icon={Package} />
-          <StatCard title="Used" value={used} icon={ShoppingBag} />
-          <StatCard title="Available" value={available} icon={Package} variant="success" />
-          <StatCard title="Requested" value={requested} icon={Clock} variant="warning" />
+          <StatCard title="Total Assigned" value={dashboardData?.sales?.total} icon={Package} />
+          <StatCard title="Used" value={dashboardData?.sales?.approved} icon={ShoppingBag} />
+          <StatCard title="Available" value={dashboardData?.inventory?.available} icon={Package} variant="success" />
+          <StatCard title="Requested" value={dashboardData?.sales?.pending} icon={Clock} variant="warning" />
         </div>
 
         {/* SECTION 2: My Assigned Diaries Table */}
@@ -213,41 +278,42 @@ export default function VendorMyDiaries() {
         </Card>
 
         {/* SECTION 3: Request Form */}
-        <Card className="max-w-[600px]">
-          <CardHeader><CardTitle className="text-lg font-display">Request Diaries from Super Admin</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label>Diary Type</Label>
-              <Select value={reqType} onValueChange={v => setReqType(v as DiaryType)}>
-                <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(diaryTypeMap).map(([key, val]) => (
-                    <SelectItem key={key} value={key} disabled={!val.enabled}>
-                      <span className="flex items-center gap-2">
-                        {val.label}
-                        {!val.enabled && <Badge variant="secondary" className="text-[10px] ml-1 opacity-60">Coming Soon</Badge>}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Quantity Needed</Label>
-              <Input type="number" min={1} max={500} placeholder="Enter quantity..." value={reqQty} onChange={e => setReqQty(e.target.value)} />
-            </div>
-            <div>
-              <Label>Message to Admin (Optional)</Label>
-              <Textarea placeholder="Reason for request..." value={reqMsg} onChange={e => setReqMsg(e.target.value)} />
-            </div>
-            <Button onClick={handleRequestSubmit} disabled={!reqType || !reqQty || Number(reqQty) < 1} className="w-full gradient-teal text-primary-foreground">
-              <Send className="h-4 w-4 mr-2" /> Submit Request
-            </Button>
-          </CardContent>
-        </Card>
+        {!hasPendingRequest && (
+          <Card className="max-w-[600px]">
+            <CardHeader><CardTitle className="text-lg font-display">Request Diaries from Super Admin</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Diary Type</Label>
+                <Select value={reqType} onValueChange={v => setReqType(v as DiaryType)}>
+                  <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(diaryTypeMap).map(([key, val]) => (
+                      <SelectItem key={key} value={key} disabled={!val.enabled}>
+                        <span className="flex items-center gap-2">
+                          {val.label}
+                          {!val.enabled && <Badge variant="secondary" className="text-[10px] ml-1 opacity-60">Coming Soon</Badge>}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Quantity Needed</Label>
+                <Input type="number" min={1} max={500} placeholder="Enter quantity..." value={reqQty} onChange={e => setReqQty(e.target.value)} />
+              </div>
+              <div>
+                <Label>Message to Admin (Optional)</Label>
+                <Textarea placeholder="Reason for request..." value={reqMsg} onChange={e => setReqMsg(e.target.value)} />
+              </div>
+              <Button onClick={handleRequestSubmit} disabled={!reqType || !reqQty || Number(reqQty) < 1} className="w-full gradient-teal text-primary-foreground">
+                <Send className="h-4 w-4 mr-2" /> Submit Request
+              </Button>
+            </CardContent>
+          </Card>)}
 
         {/* SECTION 4: Request History */}
-        {myRequests.length > 0 && (
+        {diaryRequests.length > 0 && (
           <Card>
             <CardHeader><CardTitle className="text-lg font-display">Request History</CardTitle></CardHeader>
             <CardContent>
@@ -264,10 +330,10 @@ export default function VendorMyDiaries() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {myRequests.map(r => (
+                    {diaryRequests.map(r => (
                       <TableRow key={r.id} className="hover:bg-muted/30">
                         <TableCell className="text-sm">{r.requestDate}</TableCell>
-                        <TableCell className="capitalize text-sm">{r.diaryType}</TableCell>
+                        <TableCell className="capitalize text-sm">{r.dairyType}</TableCell>
                         <TableCell className="font-medium">{r.quantity}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={`text-xs capitalize ${r.status === "pending" ? "bg-warning/15 text-warning border-warning/30" :
