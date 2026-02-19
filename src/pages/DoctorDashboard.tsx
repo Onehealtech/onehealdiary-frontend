@@ -140,6 +140,7 @@ export default function DoctorDashboard() {
   const [apiNotifications, setApiNotifications] = useState<any[]>([]);
   const [recentExports, setRecentExports] = useState<any[]>([]);
   const [patientEntries, setPatientEntries] = useState<any[]>([]);
+  const [photoHistory, setPhotoHistory] = useState<any[]>([]);
 
   // ---- UI state ----
   const [loading, setLoading] = useState(true);
@@ -271,23 +272,37 @@ export default function DoctorDashboard() {
     fetchExports();
   }, []);
 
-  // Fetch patient detail + diary entries when a patient is selected
+  // Fetch patient detail + diary entries + photo history when a patient is selected
   useEffect(() => {
     if (!selectedPatientId) {
       setPatientEntries([]);
+      setPhotoHistory([]);
       return;
     }
     const fetchDetail = async () => {
       try {
-        const [pRes, eRes] = await Promise.all([
+        // Get diaryId from already-loaded patients list to call image-history
+        const diaryId = myPatients.find(p => p.id === selectedPatientId)?.diaryId;
+
+        const requests: Promise<any>[] = [
           axios.get(`${BASE_URL}/api/v1/patient/${selectedPatientId}`, authHeaders()),
           axios.get(`${BASE_URL}/api/v1/diary-entries/?patientId=${selectedPatientId}&limit=100`, authHeaders()),
-        ]);
+        ];
+        // Only fetch image history if we have a valid diaryId
+        if (diaryId && diaryId !== "—") {
+          requests.push(axios.get(`${BASE_URL}/api/v1/upload/image-history/${diaryId}`, authHeaders()));
+        }
+
+        const [pRes, eRes, imgRes] = await Promise.all(requests);
         const patient = pRes.data.data || pRes.data;
         // Update the patient in the list with detailed data
         setMyPatients(prev => prev.map(p => p.id === selectedPatientId ? mapPatient(patient) : p));
         const entries = eRes.data.data?.entries || eRes.data.data || [];
         setPatientEntries(entries.map((e: any, i: number) => mapEntry(e, i)));
+        // Set photo history if the API was called
+        if (imgRes) {
+          setPhotoHistory(imgRes.data.data || []);
+        }
       } catch (err) {
         console.error("Error fetching patient detail:", err);
         // Fallback: filter entries from allEntries
@@ -563,8 +578,22 @@ export default function DoctorDashboard() {
                         {entry.doctorReviewed ? <span className="text-xs text-success">Reviewed</span> : <span className="text-xs text-warning">Unreviewed</span>}
                       </div>
                     </div>
-                    <div className="bg-muted rounded h-24 flex items-center justify-center mb-2">
-                      <BookOpen className="h-8 w-8 text-muted-foreground/40" />
+                    <div className="bg-muted rounded h-24 flex items-center justify-center mb-2 overflow-hidden">
+                      {entry.imageUrl ? (
+                        <img
+                          src={entry.imageUrl.startsWith("http") ? entry.imageUrl : `/uploads/${entry.imageUrl.replace(/^.*uploads\//, "")}`}
+                          alt={`Diary page ${entry.pageNumber}`}
+                          className="w-full h-full object-cover rounded"
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            e.currentTarget.nextElementSibling?.removeAttribute("style");
+                          }}
+                        />
+                      ) : null}
+                      <BookOpen
+                        className="h-8 w-8 text-muted-foreground/40"
+                        style={entry.imageUrl ? { display: "none" } : undefined}
+                      />
                     </div>
                     <p className="text-xs text-muted-foreground">{entry.uploadDate}</p>
                     <div className="flex gap-2 mt-2 text-xs">
@@ -577,6 +606,46 @@ export default function DoctorDashboard() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* ===== UPLOADED PHOTOS (from /upload/image-history) ===== */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Uploaded Diary Photos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {photoHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-2">
+                  <Image className="h-10 w-10 opacity-30" />
+                  <p className="text-sm">No diary photos uploaded yet</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+                  {photoHistory.map((photo: any, idx: number) => (
+                    <div
+                      key={photo.id || idx}
+                      className="group relative rounded-lg overflow-hidden border bg-muted aspect-square cursor-pointer"
+                      onClick={() => window.open(`/uploads/${photo.fileName}`, "_blank")}
+                    >
+                      <img
+                        src={`/uploads/${photo.fileName}`}
+                        alt={`Diary photo ${idx + 1}`}
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                          (e.currentTarget.parentElement as HTMLElement).classList.add("flex", "items-center", "justify-center");
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-end">
+                        <span className="w-full text-[10px] text-white bg-black/50 px-1.5 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                          {photo.createdAt ? new Date(photo.createdAt).toLocaleDateString() : photo.fileName}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
