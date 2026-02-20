@@ -637,11 +637,7 @@ export default function DoctorDashboard() {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
                   {photoHistory.map((photo: { id?: string; fileName: string; imagePath?: string; url?: string; imageUrl?: string; createdAt?: string }, idx: number) => {
-                    const src = photo.imagePath?.startsWith("http") ? photo.imagePath
-                      : photo.imagePath?.startsWith("/uploads/") ? photo.imagePath
-                      : photo.url?.startsWith("http") ? photo.url
-                      : photo.imageUrl?.startsWith("http") ? photo.imageUrl
-                      : `/uploads/${photo.fileName}`;
+                    const src = `${BASE_URL}/uploads/${photo.fileName}`;
                     return (
                       <div
                         key={photo.id || idx}
@@ -722,11 +718,7 @@ export default function DoctorDashboard() {
               </DialogTitle>
             </DialogHeader>
             {lightboxPhoto && (() => {
-              const src = lightboxPhoto.imagePath?.startsWith("http") ? lightboxPhoto.imagePath
-                : lightboxPhoto.imagePath?.startsWith("/uploads/") ? lightboxPhoto.imagePath
-                : lightboxPhoto.url?.startsWith("http") ? lightboxPhoto.url
-                : lightboxPhoto.imageUrl?.startsWith("http") ? lightboxPhoto.imageUrl
-                : `/uploads/${lightboxPhoto.fileName}`;
+              const src = `${BASE_URL}/uploads/${lightboxPhoto.fileName}`
               return (
                 <div className="relative bg-black/5 rounded-lg overflow-hidden flex items-center justify-center min-h-64">
                   <img
