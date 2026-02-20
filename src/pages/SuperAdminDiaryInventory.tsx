@@ -4,7 +4,7 @@ import { useData } from "@/contexts/DataContext";
 import StatusBadge from "@/components/common/StatusBadge";
 import QRCode from "react-qr-code";
 import {
-  Users, BookOpen, CreditCard, ClipboardList, Package, Plus, Search, Download, Check, X,
+  Users, BookOpen, CreditCard, ClipboardList, Package, Plus, Search, Download, Check, X, QrCode,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,7 @@ const navItems = [
   { label: "Diary Inventory", path: "/super-admin/diary-inventory", icon: Package },
   { label: "Inventory & Approvals", path: "/super-admin/inventory", icon: BookOpen },
   { label: "Financials", path: "/super-admin/financials", icon: CreditCard },
-  { label: "Compliance Audit", path: "/super-admin/audit", icon: ClipboardList },
+  // { label: "Compliance Audit", path: "/super-admin/audit", icon: ClipboardList },
 ];
 
 const diaryTypeMap: Record<string, { label: string; code: DiaryTypeCode; enabled: boolean }> = {
@@ -57,6 +57,34 @@ export default function SuperAdminDiaryInventory() {
   const [filterVendor, setFilterVendor] = useState("all");
   const [searchId, setSearchId] = useState("");
   const [requestDiary, setRequestDiary] = useState<any[]>([])
+  const [qrDiary, setQrDiary] = useState<any>(null);
+
+  // Download a QRCode SVG element as a PNG file
+  const downloadQRAsPng = (diaryId: string, containerId: string) => {
+    const svg = document.querySelector(`#${containerId} svg`) as SVGElement;
+    if (!svg) return;
+    const size = 300;
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d")!;
+    const img = new Image();
+    const blob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, 0, 0, size, size);
+      const a = document.createElement("a");
+      a.download = `qr-${diaryId}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  };
+
   // Request modal
   const [requestModal, setRequestModal] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -454,11 +482,11 @@ export default function SuperAdminDiaryInventory() {
 
 
   // Inventory table filters
-  // const allDiaries = generatedDiaries
-  //   .filter(d => filterType === "all" || d.type === filterType)
-  //   .filter(d => filterStatus === "all" || d.status === filterStatus)
-  //   .filter(d => filterVendor === "all" || d.assignedVendorId === filterVendor)
-  //   .filter(d => !searchId || d.id.toLowerCase().includes(searchId.toLowerCase()));
+  const filteredDiaries = generatedDiaries
+    .filter(d => filterType === "all" || d.diaryType === filterType)
+    .filter(d => filterStatus === "all" || d.status === filterStatus)
+    .filter(d => filterVendor === "all" || d.assignedVendorId === filterVendor)
+    .filter(d => !searchId || d.id?.toLowerCase().includes(searchId.toLowerCase()));
 
   const pendingRequests = diaryRequests.filter(r => r.status === "pending");
 
@@ -582,10 +610,10 @@ export default function SuperAdminDiaryInventory() {
                     <AccordionContent>
                       <div className="flex flex-col sm:flex-row gap-6 py-2">
                         <div className="flex flex-col items-center gap-2">
-                          <div className="bg-white p-3 rounded-lg border">
-                            <QRCode value={diary.id} size={150} />
+                          <div id={`qr-acc-${diary.id}`} className="bg-white p-3 rounded-lg border">
+                            <QRCode value={diary.serialNumber || diary.id} size={150} />
                           </div>
-                          <Button size="sm" variant="outline" onClick={() => toast({ title: "QR Downloaded", description: diary.id })}>
+                          <Button size="sm" variant="outline" onClick={() => downloadQRAsPng(diary.serialNumber || diary.id, `qr-acc-${diary.id}`)}>
                             <Download className="h-3 w-3 mr-1" /> Download QR
                           </Button>
                         </div>
@@ -642,7 +670,7 @@ export default function SuperAdminDiaryInventory() {
         {generatedDiaries.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg font-display">All Generated Diaries ({generatedDiaries.length})</CardTitle>
+              <CardTitle className="text-lg font-display">All Generated Diaries ({filteredDiaries.length}{filteredDiaries.length !== generatedDiaries.length ? ` of ${generatedDiaries.length}` : ""})</CardTitle>
               <div className="flex flex-wrap gap-3 mt-3">
                 <Select value={filterType} onValueChange={setFilterType}>
                   <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
@@ -690,9 +718,9 @@ export default function SuperAdminDiaryInventory() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {generatedDiaries.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No diaries match filters</TableCell></TableRow>
-                    ) : generatedDiaries.map(d => (
+                    {filteredDiaries.length === 0 ? (
+                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-6">No diaries match the selected filters.</TableCell></TableRow>
+                    ) : filteredDiaries.map(d => (
                       <TableRow key={d.id} className="hover:bg-muted/30">
                         <TableCell className="font-mono text-xs font-medium">{d.id}</TableCell>
                         <TableCell><Badge variant="secondary" className="capitalize text-xs">{diaryTypeMap[d.diaryType]?.label}</Badge></TableCell>
@@ -701,7 +729,9 @@ export default function SuperAdminDiaryInventory() {
                         <TableCell className="text-sm">{d.assignedVendorId ? vendors.find(v => v.id === d.assignedVendorId)?.name : "Not Assigned"}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => toast({ title: "QR Preview", description: d.id })}>View QR</Button>
+                            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setQrDiary(d)}>
+                              <QrCode className="h-3 w-3 mr-1" />View QR
+                            </Button>
                             {d.status !== "active" && d.assignedVendorId && (
                               <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
                                 setGeneratedDiaries(prev => prev.map(gd => gd.id === d.id ? { ...gd, assignedVendorId: undefined, status: "unassigned" as const } : gd));
@@ -742,6 +772,37 @@ export default function SuperAdminDiaryInventory() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* QR Code Modal */}
+      <Dialog open={!!qrDiary} onOpenChange={(open) => { if (!open) setQrDiary(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="h-5 w-5" />
+              Diary QR Code
+            </DialogTitle>
+          </DialogHeader>
+          {qrDiary && (
+            <div className="flex flex-col items-center gap-4 py-2">
+              <div id="qr-admin-modal" className="p-4 bg-white rounded-xl border">
+                <QRCode value={qrDiary.serialNumber || qrDiary.id} size={200} level="M" />
+              </div>
+              <div className="w-full space-y-1 text-sm text-center">
+                <p className="font-mono font-semibold text-base">{qrDiary.serialNumber || qrDiary.id}</p>
+                <p className="text-muted-foreground capitalize">{diaryTypeMap[qrDiary.diaryType]?.label || qrDiary.diaryType}</p>
+                <Badge variant="outline" className={`text-xs capitalize ${statusColors[qrDiary.status]}`}>{qrDiary.status}</Badge>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => downloadQRAsPng(qrDiary.serialNumber || qrDiary.id, "qr-admin-modal")}
+              >
+                <Download className="h-4 w-4 mr-2" />Download QR (PNG)
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

@@ -838,7 +838,9 @@ export default function VendorDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sales.map((sale) => (
+                  {filteredSales.length === 0 ? (
+                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No sales match the selected filter.</TableCell></TableRow>
+                  ) : filteredSales.map((sale) => (
                     <TableRow key={sale.id} className="hover:bg-muted/30">
 
                       <TableCell className="text-xs">

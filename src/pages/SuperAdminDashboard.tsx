@@ -27,7 +27,7 @@ const navItems = [
   { label: "Diary Inventory", path: "/super-admin/diary-inventory", icon: Package },
   { label: "Inventory & Approvals", path: "/super-admin/inventory", icon: BookOpen },
   { label: "Financials", path: "/super-admin/financials", icon: CreditCard },
-  { label: "Compliance Audit", path: "/super-admin/audit", icon: ClipboardList },
+  // { label: "Compliance Audit", path: "/super-admin/audit", icon: ClipboardList },
 ];
 
 export default function SuperAdminDashboard() {
@@ -954,59 +954,68 @@ export default function SuperAdminDashboard() {
     );
   }
 
-  // ========== AUDIT ==========
+  // ========== AUDIT (commented out) ==========
+  // return (
+  //   <DashboardLayout navItems={navItems} roleLabel="Super Admin">
+  //     <div className="space-y-6">
+  //       <Card>
+  //         <CardHeader>
+  //           <CardTitle className="text-lg font-display">Audit Logs</CardTitle>
+  //           <div className="flex flex-wrap gap-3 mt-2">
+  //             <div className="flex items-center gap-2">
+  //               <Label className="text-xs">Role:</Label>
+  //               <Select value={auditRoleFilter} onValueChange={setAuditRoleFilter}>
+  //                 <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+  //                 <SelectContent>
+  //                   <SelectItem value="all">All</SelectItem>
+  //                   <SelectItem value="vendor">Vendor</SelectItem>
+  //                   <SelectItem value="doctor">Doctor</SelectItem>
+  //                   <SelectItem value="assistant">Assistant</SelectItem>
+  //                   <SelectItem value="super admin">Super Admin</SelectItem>
+  //                 </SelectContent>
+  //               </Select>
+  //             </div>
+  //             <div className="flex items-center gap-2">
+  //               <Label className="text-xs">Action:</Label>
+  //               <Select value={auditActionFilter} onValueChange={setAuditActionFilter}>
+  //                 <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
+  //                 <SelectContent>
+  //                   <SelectItem value="all">All Actions</SelectItem>
+  //                   {auditActions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+  //                 </SelectContent>
+  //               </Select>
+  //             </div>
+  //           </div>
+  //         </CardHeader>
+  //         <CardContent>
+  //           <div className="rounded-lg border overflow-auto">
+  //             <Table>
+  //               <TableHeader><TableRow className="bg-muted/50"><TableHead>Timestamp</TableHead><TableHead>Vendor</TableHead><TableHead>Doctor</TableHead><TableHead>Action</TableHead><TableHead>Details</TableHead><TableHead>IP</TableHead></TableRow></TableHeader>
+  //               <TableBody>
+  //                 {filteredAuditLogs.map(l => (
+  //                   <TableRow key={l.id} className="hover:bg-muted/30">
+  //                     <TableCell className="text-xs">{new Date(l.timestamp).toLocaleString()}</TableCell>
+  //                     <TableCell className="text-sm">{l.vendorName || "—"}</TableCell>
+  //                     <TableCell className="text-sm">{l.doctorName || "—"}</TableCell>
+  //                     <TableCell>{l.action}</TableCell>
+  //                     <TableCell className="text-sm text-muted-foreground">{l.details}</TableCell>
+  //                     <TableCell className="font-mono text-xs">{l.ipAddress}</TableCell>
+  //                   </TableRow>
+  //                 ))}
+  //               </TableBody>
+  //             </Table>
+  //           </div>
+  //         </CardContent>
+  //       </Card>
+  //     </div>
+  //   </DashboardLayout>
+  // );
+
+  // Fallback: redirect to dashboard when /audit is hit directly
   return (
     <DashboardLayout navItems={navItems} roleLabel="Super Admin">
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg font-display">Audit Logs</CardTitle>
-            <div className="flex flex-wrap gap-3 mt-2">
-              <div className="flex items-center gap-2">
-                <Label className="text-xs">Role:</Label>
-                <Select value={auditRoleFilter} onValueChange={setAuditRoleFilter}>
-                  <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="vendor">Vendor</SelectItem>
-                    <SelectItem value="doctor">Doctor</SelectItem>
-                    <SelectItem value="assistant">Assistant</SelectItem>
-                    <SelectItem value="super admin">Super Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-xs">Action:</Label>
-                <Select value={auditActionFilter} onValueChange={setAuditActionFilter}>
-                  <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Actions</SelectItem>
-                    {auditActions.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg border overflow-auto">
-              <Table>
-                <TableHeader><TableRow className="bg-muted/50"><TableHead>Timestamp</TableHead><TableHead>Vendor</TableHead><TableHead>Doctor</TableHead><TableHead>Action</TableHead><TableHead>Details</TableHead><TableHead>IP</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {filteredAuditLogs.map(l => (
-                    <TableRow key={l.id} className="hover:bg-muted/30">
-                      <TableCell className="text-xs">{new Date(l.timestamp).toLocaleString()}</TableCell>
-                      <TableCell className="text-sm">{l.vendorName || "—"}</TableCell>
-                      <TableCell className="text-sm">{l.doctorName || "—"}</TableCell>
-                      <TableCell>{l.action}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{l.details}</TableCell>
-                      <TableCell className="font-mono text-xs">{l.ipAddress}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
+        <p>Page not available.</p>
       </div>
     </DashboardLayout>
   );
