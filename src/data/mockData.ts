@@ -51,6 +51,7 @@ export interface GeneratedDiary {
   diaryType: DiaryType;
   typeCode: DiaryTypeCode;
   generatedDate: string;
+  serialNumber: string;
   status: InventoryDiaryStatus;
   assignedVendorId?: string;
   patientName?: string;

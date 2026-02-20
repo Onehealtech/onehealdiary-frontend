@@ -23,8 +23,8 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("demo@oneheal.com");
-  const [password, setPassword] = useState("password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -90,6 +90,7 @@ export default function LoginPage() {
             <Label>Email</Label>
             <Input
               type="email"
+              placeholder="demo@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleLogin()}
@@ -102,6 +103,7 @@ export default function LoginPage() {
               <Input
                 type={showPassword ? "text" : "password"}
                 value={password}
+                placeholder="Password"
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                 className="pr-10"
