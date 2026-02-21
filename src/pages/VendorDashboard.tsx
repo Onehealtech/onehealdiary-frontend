@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import { useData } from "@/contexts/DataContext";
+import { useAuth } from "@/contexts/AuthContext";
 import StatCard from "@/components/common/StatCard";
 import StatusBadge from "@/components/common/StatusBadge";
 import {
   ShoppingBag, Wallet, TrendingUp, QrCode,
   Phone, CheckCircle2, ArrowRight, Download, UserPlus, Stethoscope,
-  Eye, Receipt, IndianRupee, Package,
-  Plus,
+  Eye, EyeOff, Receipt, IndianRupee, Package,
+  Plus, UserCircle, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ const navItems = [
   { label: "Onboard Doctor", path: "/vendor/doctors", icon: Stethoscope },
   { label: "My Diaries", path: "/vendor/my-diaries", icon: Package },
   { label: "My Sales", path: "/vendor/sales", icon: TrendingUp },
+  { label: "My Profile", path: "/vendor/profile", icon: UserCircle },
 ];
 
 const diaryTypeOptions: { value: DiaryType; label: string; icon: string }[] = [
@@ -42,8 +44,12 @@ const diaryTypeOptions: { value: DiaryType; label: string; icon: string }[] = [
   { value: "radiology", label: "Radiology", icon: "☢️" },
 ];
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const authHeaders = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+
 export default function VendorDashboard() {
   const { doctors, setDoctors, patients, diaries } = useData();
+  const { user, login } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
   const currentPage = location.pathname;
@@ -85,6 +91,55 @@ export default function VendorDashboard() {
   const [sales, setSales] = useState<any[]>([]);
   const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
   const [checkingWallet, setCheckingWallet] = useState(true);
+
+  // Profile state
+  const [profileName, setProfileName] = useState(user?.fullName || "");
+  const [profileEmail, setProfileEmail] = useState(user?.email || "");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPwd, setShowCurrentPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  const handleUpdateProfile = async () => {
+    if (!profileName.trim()) return;
+    setProfileLoading(true);
+    try {
+      await axios.put(`${BASE_URL}/api/v1/user/profile`, { fullName: profileName, phone: profilePhone || undefined }, authHeaders());
+      login({ ...user!, fullName: profileName });
+      toast({ title: "Profile updated successfully!" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to update profile", variant: "destructive" });
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) return;
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Passwords don't match", description: "New password and confirm password must be the same.", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: "Password too short", description: "Password must be at least 6 characters.", variant: "destructive" });
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      await axios.put(`${BASE_URL}/api/v1/auth/change-password`, { currentPassword, newPassword }, authHeaders());
+      toast({ title: "Password changed successfully!" });
+      setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to change password.", variant: "destructive" });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   const handleDiaryValidation = async () => {
     if (!serialNumber) return;
 
@@ -791,6 +846,132 @@ export default function VendorDashboard() {
                   </TableBody>
                 </Table>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // ========== PROFILE ==========
+  if (currentPage.includes("/profile")) {
+    return (
+      <DashboardLayout navItems={navItems} roleLabel="Vendor">
+        <div className="space-y-6 max-w-2xl">
+          <div>
+            <h2 className="text-xl font-display font-bold">My Profile</h2>
+            <p className="text-sm text-muted-foreground">Update your personal information and account security</p>
+          </div>
+
+          {/* Edit Profile */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <UserCircle className="h-5 w-5" />Edit Profile
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Full Name</Label>
+                <Input
+                  value={profileName}
+                  onChange={e => setProfileName(e.target.value)}
+                  placeholder="Your full name"
+                />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input
+                  value={profileEmail}
+                  disabled
+                  className="bg-muted/50 cursor-not-allowed"
+                  placeholder="Email (cannot be changed)"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Email cannot be changed. Contact support if needed.</p>
+              </div>
+              <div>
+                <Label>Phone Number</Label>
+                <Input
+                  value={profilePhone}
+                  onChange={e => setProfilePhone(e.target.value)}
+                  placeholder="e.g., +91 98765 43210"
+                  type="tel"
+                />
+              </div>
+              <Button
+                className="gradient-teal text-primary-foreground"
+                onClick={handleUpdateProfile}
+                disabled={profileLoading || !profileName.trim()}
+              >
+                {profileLoading ? "Saving..." : "Save Changes"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Change Password */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Lock className="h-5 w-5" />Change Password
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Current Password</Label>
+                <div className="relative">
+                  <Input
+                    type={showCurrentPwd ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={e => setCurrentPassword(e.target.value)}
+                    placeholder="Enter your current password"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowCurrentPwd(prev => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showCurrentPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <Label>New Password</Label>
+                <div className="relative">
+                  <Input
+                    type={showNewPwd ? "text" : "password"}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Enter new password (min. 6 characters)"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowNewPwd(prev => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showNewPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <Label>Confirm New Password</Label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={handleChangePassword}
+                disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
+              >
+                {passwordLoading ? "Changing..." : "Change Password"}
+              </Button>
             </CardContent>
           </Card>
         </div>

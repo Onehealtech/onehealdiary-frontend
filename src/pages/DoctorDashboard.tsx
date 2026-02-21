@@ -5,11 +5,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import StatCard from "@/components/common/StatCard";
 import StatusBadge from "@/components/common/StatusBadge";
 import {
-  Users, BookOpen, Activity, Search, Phone, Eye, ArrowLeft,
+  Users, BookOpen, Activity, Search, Phone, Eye, EyeOff, ArrowLeft,
   Send, Plus, Settings, Download, Bell, FileText,
   ClipboardCheck, CheckCircle2, Trash2,
-  Image, FileDown, Loader2,
+  Image, FileDown, Loader2, UserCircle, Lock,
 } from "lucide-react";
+import jsPDF from "jspdf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +39,7 @@ const navItems = [
   { label: "Task Assignment", path: "/doctor/tasks", icon: ClipboardCheck },
   { label: "Notifications", path: "/doctor/notifications", icon: Bell },
   { label: "Reports", path: "/doctor/reports", icon: FileText },
+  { label: "Profile", path: "/doctor/profile", icon: UserCircle },
 ];
 
 const taskTypeOptions = [
@@ -126,7 +128,7 @@ const mapTask = (t: any) => ({
 });
 
 export default function DoctorDashboard() {
-  const { user } = useAuth();
+  const { user, login } = useAuth();
   const { toast } = useToast();
   const location = useLocation();
   const currentPage = location.pathname;
@@ -171,6 +173,24 @@ export default function DoctorDashboard() {
   const [reportIncludes, setReportIncludes] = useState({ demographics: true, treatment: true, entries: true, symptoms: true, medications: true, appointments: true });
   const [selectedPhotoPages, setSelectedPhotoPages] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
+
+  // Profile state
+  const [profileName, setProfileName] = useState(user?.fullName || "");
+  const [profileEmail, setProfileEmail] = useState(user?.email || "");
+  const [profilePhone, setProfilePhone] = useState("");
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPwd, setShowCurrentPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // Photo export state (for Reports page)
+  const [reportPhotoHistory, setReportPhotoHistory] = useState<{ id?: string; fileName: string; imagePath?: string; createdAt?: string }[]>([]);
+  const [reportPhotoLoading, setReportPhotoLoading] = useState(false);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   // Clear selected patient when navigating away from the root doctor page
   useEffect(() => {
@@ -326,7 +346,100 @@ export default function DoctorDashboard() {
     fetchDetail();
   }, [selectedPatientId]);
 
+  // Fetch uploaded photos for the selected report patient
+  useEffect(() => {
+    if (!reportPatient) { setReportPhotoHistory([]); setSelectedPhotoIds([]); return; }
+    const patient = myPatients.find(p => p.id === reportPatient);
+    const diaryId = patient?.diaryId;
+    if (!diaryId || diaryId === "—") { setReportPhotoHistory([]); return; }
+    setReportPhotoLoading(true);
+    axios.get(`${BASE_URL}/api/v1/upload/image-history/${diaryId}`, authHeaders())
+      .then(res => setReportPhotoHistory(res.data.data || []))
+      .catch(() => setReportPhotoHistory([]))
+      .finally(() => setReportPhotoLoading(false));
+    setSelectedPhotoIds([]);
+  }, [reportPatient, myPatients]);
+
   // ==================== HANDLERS ====================
+
+  const handleUpdateProfile = async () => {
+    if (!profileName.trim()) return;
+    setProfileLoading(true);
+    try {
+      await axios.put(`${BASE_URL}/api/v1/user/profile`, { fullName: profileName, phone: profilePhone || undefined }, authHeaders());
+      login({ ...user!, fullName: profileName });
+      toast({ title: "Profile updated successfully!" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to update profile", variant: "destructive" });
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) return;
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Passwords don't match", description: "New password and confirm password must be the same.", variant: "destructive" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: "Password too short", description: "Password must be at least 6 characters.", variant: "destructive" });
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      await axios.put(`${BASE_URL}/api/v1/auth/change-password`, { currentPassword, newPassword }, authHeaders());
+      toast({ title: "Password changed successfully!" });
+      setCurrentPassword(""); setNewPassword(""); setConfirmPassword("");
+    } catch (error: any) {
+      toast({ title: "Error", description: error.response?.data?.message || "Failed to change password.", variant: "destructive" });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const handleExportPhotosPDF = async () => {
+    const photos = reportPhotoHistory.filter(p => selectedPhotoIds.includes(p.id || p.fileName));
+    if (photos.length === 0) return;
+    setExportingPdf(true);
+    const patientName = myPatients.find(p => p.id === reportPatient)?.name || "Patient";
+    try {
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        const imgUrl = `${BASE_URL}/uploads/${photo.fileName}`;
+        try {
+          const response = await fetch(imgUrl, { mode: "cors" });
+          const blob = await response.blob();
+          const dataUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          if (i > 0) pdf.addPage();
+          pdf.setFontSize(13);
+          pdf.setTextColor(0, 0, 0);
+          pdf.text(`${patientName} — Diary Photo`, 10, 14);
+          pdf.setFontSize(8);
+          pdf.setTextColor(120, 120, 120);
+          pdf.text(`Photo ${i + 1} of ${photos.length}  ·  ${photo.createdAt ? new Date(photo.createdAt).toLocaleDateString("en-IN") : photo.fileName}`, 10, 21);
+          pdf.setTextColor(0, 0, 0);
+          pdf.addImage(dataUrl, "JPEG", 10, 27, 190, 245);
+        } catch {
+          if (i > 0) pdf.addPage();
+          pdf.setFontSize(11);
+          pdf.text(`Image not available: ${photo.fileName}`, 10, 140);
+        }
+      }
+      pdf.save(`diary-photos-${patientName.replace(/\s+/g, "-")}.pdf`);
+      toast({ title: `PDF downloaded with ${photos.length} photo(s)!` });
+    } catch {
+      toast({ title: "Export failed", description: "Could not generate PDF. Ensure images are accessible.", variant: "destructive" });
+    } finally {
+      setExportingPdf(false);
+    }
+  };
 
   const handleAddAssistant = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1157,6 +1270,132 @@ export default function DoctorDashboard() {
     );
   }
 
+  // ========== PROFILE ==========
+  if (currentPage.includes("/profile")) {
+    return (
+      <DashboardLayout navItems={navItems} roleLabel="Doctor">
+        <div className="space-y-6 max-w-2xl">
+          <div>
+            <h2 className="text-xl font-display font-bold">My Profile</h2>
+            <p className="text-sm text-muted-foreground">Update your personal information and account security</p>
+          </div>
+
+          {/* Edit Profile */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <UserCircle className="h-5 w-5" />Edit Profile
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Full Name</Label>
+                <Input
+                  value={profileName}
+                  onChange={e => setProfileName(e.target.value)}
+                  placeholder="Your full name"
+                />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input
+                  value={profileEmail}
+                  disabled
+                  className="bg-muted/50 cursor-not-allowed"
+                  placeholder="Email (cannot be changed)"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Email cannot be changed. Contact support if needed.</p>
+              </div>
+              <div>
+                <Label>Phone Number</Label>
+                <Input
+                  value={profilePhone}
+                  onChange={e => setProfilePhone(e.target.value)}
+                  placeholder="e.g., +91 98765 43210"
+                  type="tel"
+                />
+              </div>
+              <Button
+                className="gradient-teal text-primary-foreground"
+                onClick={handleUpdateProfile}
+                disabled={profileLoading || !profileName.trim()}
+              >
+                {profileLoading ? "Saving..." : "Save Changes"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Change Password */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Lock className="h-5 w-5" />Change Password
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Current Password</Label>
+                <div className="relative">
+                  <Input
+                    type={showCurrentPwd ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={e => setCurrentPassword(e.target.value)}
+                    placeholder="Enter your current password"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowCurrentPwd(prev => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showCurrentPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <Label>New Password</Label>
+                <div className="relative">
+                  <Input
+                    type={showNewPwd ? "text" : "password"}
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder="Enter new password (min. 6 characters)"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowNewPwd(prev => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showNewPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <Label>Confirm New Password</Label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={handleChangePassword}
+                disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
+              >
+                {passwordLoading ? "Changing..." : "Change Password"}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   // ========== REPORTS ==========
   return (
     <DashboardLayout navItems={navItems} roleLabel="Doctor">
@@ -1235,24 +1474,83 @@ export default function DoctorDashboard() {
             <Card className={`cursor-pointer border-2 transition-all ${reportExportType === "photos" ? "border-secondary" : "border-border"}`} onClick={() => setReportExportType("photos")}>
               <CardHeader><CardTitle className="text-base flex items-center gap-2"><Image className="h-5 w-5" />Export Diary Page Photos</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">{reportEntries.length} pages available</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {reportEntries.slice(0, 8).map(e => (
-                    <div key={e.id} onClick={ev => { ev.stopPropagation(); setSelectedPhotoPages(prev => prev.includes(e.id) ? prev.filter((id: string) => id !== e.id) : [...prev, e.id]); }} className={`p-2 rounded border text-center cursor-pointer transition-all ${selectedPhotoPages.includes(e.id) ? "border-secondary bg-secondary/10" : "border-border"}`}>
-                      <BookOpen className="h-6 w-6 text-muted-foreground/40 mx-auto" />
-                      <p className="text-[10px] mt-1">P{e.pageNumber}</p>
+                {reportPhotoLoading ? (
+                  <div className="flex items-center justify-center py-6 gap-2 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span className="text-sm">Loading photos...</span>
+                  </div>
+                ) : reportPhotoHistory.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 gap-2 text-muted-foreground">
+                    <Image className="h-8 w-8 opacity-30" />
+                    <p className="text-sm">No uploaded photos for this patient</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">{reportPhotoHistory.length} photo(s) available</p>
+                    <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
+                      {reportPhotoHistory.map((photo, idx) => {
+                        const photoKey = photo.id || photo.fileName;
+                        const isSelected = selectedPhotoIds.includes(photoKey);
+                        const src = `${BASE_URL}/uploads/${photo.fileName}`;
+                        return (
+                          <div
+                            key={photoKey}
+                            onClick={ev => {
+                              ev.stopPropagation();
+                              setSelectedPhotoIds(prev =>
+                                prev.includes(photoKey) ? prev.filter(id => id !== photoKey) : [...prev, photoKey]
+                              );
+                            }}
+                            className={`relative rounded-lg border-2 overflow-hidden aspect-square cursor-pointer transition-all ${isSelected ? "border-secondary ring-2 ring-secondary/30" : "border-border"}`}
+                          >
+                            <img
+                              src={src}
+                              alt={`Photo ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                              onError={e => {
+                                e.currentTarget.style.display = "none";
+                                const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                                if (fallback) fallback.style.display = "flex";
+                              }}
+                            />
+                            <div style={{ display: "none" }} className="absolute inset-0 flex-col items-center justify-center gap-1 bg-muted text-muted-foreground/50">
+                              <Image className="h-5 w-5" />
+                              <span className="text-[9px]">N/A</span>
+                            </div>
+                            {isSelected && (
+                              <div className="absolute top-1 right-1 h-5 w-5 bg-secondary rounded-full flex items-center justify-center">
+                                <CheckCircle2 className="h-3 w-3 text-white" />
+                              </div>
+                            )}
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1 py-0.5">
+                              <p className="text-[9px] text-white truncate">
+                                {photo.createdAt ? new Date(photo.createdAt).toLocaleDateString("en-IN") : photo.fileName}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox checked={selectedPhotoPages.length === reportEntries.length && reportEntries.length > 0} onCheckedChange={c => setSelectedPhotoPages(c ? reportEntries.map((e: any) => e.id) : [])} />
-                  <span className="text-sm">Select All Pages</span>
-                  {selectedPhotoPages.length > 0 && <span className="text-xs text-muted-foreground ml-auto">{selectedPhotoPages.length} selected</span>}
-                </div>
-                {reportExportType === "photos" && (
-                  <Button className="w-full gradient-teal text-primary-foreground" onClick={handleGenerateReport} disabled={generating || selectedPhotoPages.length === 0}>
-                    {generating ? "Generating..." : "Generate Photo PDF"}
-                  </Button>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={selectedPhotoIds.length === reportPhotoHistory.length}
+                        onCheckedChange={c => setSelectedPhotoIds(c ? reportPhotoHistory.map(p => p.id || p.fileName) : [])}
+                      />
+                      <span className="text-sm">Select All</span>
+                      {selectedPhotoIds.length > 0 && (
+                        <span className="text-xs text-muted-foreground ml-auto">{selectedPhotoIds.length} selected</span>
+                      )}
+                    </div>
+                    {reportExportType === "photos" && (
+                      <Button
+                        className="w-full gradient-teal text-primary-foreground"
+                        onClick={e => { e.stopPropagation(); handleExportPhotosPDF(); }}
+                        disabled={exportingPdf || selectedPhotoIds.length === 0}
+                      >
+                        {exportingPdf ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Generating PDF...</> : <><FileDown className="h-4 w-4 mr-2" />Export {selectedPhotoIds.length} Photo(s) as PDF</>}
+                      </Button>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
